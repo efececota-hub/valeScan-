@@ -5,7 +5,7 @@ import { FirebaseErrorListener } from "@/components/firebase-error-listener";
 
 export const metadata: Metadata = {
   title: "ValeScan - Transnova Plus",
-  description: "Gestión eficiente de vales de transporte",
+  description: "Gestión eficiente de vales de transporte para conductores",
 };
 
 export default function RootLayout({

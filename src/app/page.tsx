@@ -56,6 +56,7 @@ export default function ValeScanApp() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Manejo de Hidratación y Estado Inicial
   useEffect(() => {
     if (!isReady || !db) return;
 
@@ -107,6 +108,7 @@ export default function ValeScanApp() {
       const q = query(collection(db, "vales"), where("conductorDoc", "==", docStr));
       const snapshot = await getDocs(q);
       const vales = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Ordenamiento manual para evitar error de índices compuestos en Firestore inicial
       vales.sort((a: any, b: any) => {
         const timeA = a.fechaRegistro?.toMillis?.() || 0;
         const timeB = b.fechaRegistro?.toMillis?.() || 0;
@@ -195,7 +197,7 @@ export default function ValeScanApp() {
         setStep('review');
       } catch (err: any) { 
         console.error("AI Error:", err);
-        setError("La IA no pudo procesar la imagen automáticamente. Completa los campos manualmente.");
+        setError("Error en IA. Puedes completar los campos manualmente.");
         setStep('review'); 
       } finally { 
         setLoading(false); 
@@ -224,13 +226,13 @@ export default function ValeScanApp() {
         conductorDoc: currentDriver.documento,
         tipo: "descuento",
         monto: costoPorVale,
-        detalle: `Descuento por Vale #${voucherData.numeroVale}`
+        detalle: `Vale #${voucherData.numeroVale}`
       });
 
       await loadHistory(currentDriver.documento);
       setStep('success');
     } catch (err) {
-      alert("Error al registrar el vale en la base de datos.");
+      alert("Error al registrar el vale.");
     } finally {
       setLoading(false);
     }
@@ -312,7 +314,7 @@ export default function ValeScanApp() {
               <div className="text-center p-8 border-2 border-dashed border-slate-800 rounded-3xl">
                 <Clock className="w-12 h-12 text-amber-500 mx-auto mb-4" />
                 <h3 className="text-xl font-bold uppercase italic">Acceso Pendiente</h3>
-                <p className="text-slate-500 text-sm mt-2">Tu registro está en revisión. El administrador debe aprobar tu cuenta.</p>
+                <p className="text-slate-500 text-sm mt-2">Tu registro está en revisión por el administrador.</p>
               </div>
             )}
           </div>
@@ -330,9 +332,9 @@ export default function ValeScanApp() {
                 <div className="p-8 border-2 border-dashed border-red-500/30 rounded-[2.5rem] bg-red-500/5 text-center space-y-4">
                   <AlertCircle className="w-16 h-16 text-red-500 mx-auto" />
                   <h2 className="text-2xl font-black italic uppercase text-red-500">Saldo Insuficiente</h2>
-                  <p className="text-slate-400 text-sm italic">Tu saldo es de <b>${currentDriver?.saldo || 0}</b>. <br/>Costo por vale: <b>${costoPorVale}</b>.</p>
+                  <p className="text-slate-400 text-sm italic">Saldo: <b>${currentDriver?.saldo || 0}</b>. Costo vale: <b>${costoPorVale}</b>.</p>
                   <div className="p-4 bg-slate-900 rounded-2xl border border-slate-800">
-                    <p className="text-xs text-slate-300">Realiza tu recarga por Nequi con el administrador para continuar.</p>
+                    <p className="text-xs text-slate-300">Recarga saldo con el administrador para continuar.</p>
                   </div>
                 </div>
               ) : (
@@ -342,7 +344,7 @@ export default function ValeScanApp() {
                 >
                   <Camera className="w-16 h-16 text-blue-500 mb-4 group-hover:scale-110 transition-transform" />
                   <h2 className="text-2xl font-black italic uppercase">Escanear Vale</h2>
-                  <p className="text-[10px] text-slate-500 font-bold uppercase mt-2">La IA leerá los datos por ti</p>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase mt-2">Escanea el vale físico</p>
                   <input type="file" accept="image/*" capture="environment" className="hidden" ref={fileInputRef} onChange={(e) => e.target.files?.[0] && processFile(e.target.files[0])} />
                 </div>
               )}
@@ -350,7 +352,7 @@ export default function ValeScanApp() {
 
             <TabsContent value="history" className="space-y-4">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="font-black italic uppercase text-blue-500">Historial Reciente</h3>
+                <h3 className="font-black italic uppercase text-blue-500">Historial</h3>
                 {selectedVouchers.length > 0 && (
                   <Button onClick={() => {
                     let txt = `*REPORTE DE VALES - TRANSNOVA*\nConductor: ${currentDriver.nombre}\n\n`;
@@ -387,7 +389,7 @@ export default function ValeScanApp() {
                         <div><span className="text-slate-600 uppercase font-black">Pasajero:</span> {v.usuarioNombre}</div>
                         <div><span className="text-slate-600 uppercase font-black">Placa:</span> {v.placa}</div>
                         <div className="col-span-2"><span className="text-slate-600 uppercase font-black">Ruta:</span> {v.origen} → {v.destino}</div>
-                        <div className="col-span-2"><span className="text-slate-600 uppercase font-black">Servicio:</span> {v.descripcionServicio}</div>
+                        <div className="col-span-2"><span className="text-slate-600 uppercase font-black">Descripción:</span> {v.descripcionServicio}</div>
                       </div>
                     )}
                   </div>
@@ -406,7 +408,7 @@ export default function ValeScanApp() {
                 <AlertCircle className="text-red-600 w-5 h-5" />
                 <div>
                   <p className="text-red-500 font-black uppercase text-xs italic">VALE DUPLICADO</p>
-                  <p className="text-[10px] text-red-300">Ya registrado por {duplicateAlert.nombre} el {duplicateAlert.fecha}.</p>
+                  <p className="text-[10px] text-red-300">Registrado por {duplicateAlert.nombre} el {duplicateAlert.fecha}.</p>
                 </div>
               </div>
             )}
@@ -448,12 +450,12 @@ export default function ValeScanApp() {
           <div className="py-12 flex flex-col items-center text-center gap-8">
             <div className="w-20 h-20 bg-blue-600/10 rounded-full flex items-center justify-center animate-pulse"><Send className="w-10 h-10 text-blue-500" /></div>
             <div>
-              <h2 className="text-xl font-black italic uppercase">¿Ya enviaste la encuesta?</h2>
-              <p className="text-slate-400 text-xs mt-2">Al confirmar se registrará el servicio y se descontará de tu saldo.</p>
+              <h2 className="text-xl font-black italic uppercase">¿Enviaste la encuesta?</h2>
+              <p className="text-slate-400 text-xs mt-2">Confirma para guardar y descontar de tu saldo.</p>
             </div>
             <div className="w-full space-y-3">
-              <Button onClick={handleFinalConfirm} disabled={loading} className="w-full h-16 bg-green-600 font-black text-lg italic uppercase">SÍ, CONFIRMAR Y GUARDAR</Button>
-              <Button variant="ghost" onClick={() => setStep('review')} className="w-full text-slate-500 uppercase font-bold text-[10px]">Aún no, volver</Button>
+              <Button onClick={handleFinalConfirm} disabled={loading} className="w-full h-16 bg-green-600 font-black text-lg italic uppercase">SÍ, CONFIRMAR</Button>
+              <Button variant="ghost" onClick={() => setStep('review')} className="w-full text-slate-500 uppercase font-bold text-[10px]">No, volver</Button>
             </div>
           </div>
         )}
@@ -461,8 +463,8 @@ export default function ValeScanApp() {
         {step === 'success' && (
           <div className="py-20 flex flex-col items-center text-center gap-6">
             <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center text-green-500"><CheckCircle2 className="w-12 h-12" /></div>
-            <h2 className="text-2xl font-black italic uppercase">¡REGISTRADO!</h2>
-            <p className="text-slate-400 text-sm italic">Vale guardado correctamente.</p>
+            <h2 className="text-2xl font-black italic uppercase">¡GUARDADO!</h2>
+            <p className="text-slate-400 text-sm italic">Vale registrado con éxito.</p>
             <Button onClick={() => setStep('scan')} className="w-full h-14 bg-white text-slate-950 font-black italic rounded-2xl uppercase">Entendido</Button>
           </div>
         )}

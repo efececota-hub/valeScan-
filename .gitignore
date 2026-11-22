@@ -1,35 +1,28 @@
 
 # Dependencias
 node_modules/
-.pnp
-.pnp.js
-
-# Testing
-coverage/
-
-# Next.js
 .next/
 out/
-
-# Producción
 build/
 
-# Debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Entorno
-.env*.local
-
-# Archivos pesados y temporales
+# Archivos pesados y backups (ELIMINAR BLOQUEOS)
 *.tar
 *.tar.gz
 *.zip
 *.gz
+*.tgz
 transnova_plus.tar
+
+# Firebase/IDX
 .firebase/
+.idx/
+firebase-debug.log*
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
 # Sistema
 .DS_Store
-Thumbs.db
+thumbs.db

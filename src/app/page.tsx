@@ -78,16 +78,18 @@ export default function ValeScanApp() {
       try {
         const result = await extractVoucher(base64);
         
-        // Verificamos si el resultado vino vacío (indicando fallo en IA pero fallback manual)
-        const isEmpty = Object.values(result).every(v => v === '');
+        // Verificamos si la IA devolvió todo vacío (posible mala calidad)
+        const isEmpty = Object.values(result).every(v => v === '' || v === null);
         if (isEmpty) {
-          setError("La IA no pudo leer los datos automáticamente por baja calidad de imagen. Completa los campos manualmente.");
+          setError("La IA no detectó información en la imagen. Por favor, verifica que la foto esté bien iluminada o completa los datos manualmente.");
         }
         
         setVoucherData(result);
         setStep('review');
       } catch (err: any) {
-        setError("Error de conexión. Por favor, completa la encuesta manualmente.");
+        console.error("Error en extracción:", err);
+        // Mostramos el error técnico real para diagnóstico
+        setError(`Error del sistema: ${err.message || 'Fallo en el servicio de visión'}. Completa los datos manualmente.`);
         setStep('review');
       } finally {
         setLoading(false);
@@ -122,6 +124,7 @@ export default function ValeScanApp() {
       });
       setStep('success');
     } catch (err) {
+      // Fallback: abrir en nueva pestaña si falla el POST (común en navegadores móviles con Google Forms)
       const params = new URLSearchParams();
       Object.keys(voucherData).forEach((key) => {
         const entryId = entryIds[key as keyof typeof entryIds];
@@ -156,7 +159,7 @@ export default function ValeScanApp() {
           </div>
           <div>
             <h1 className="text-lg font-black tracking-tight leading-none uppercase italic">ValeScan</h1>
-            <span className="text-[9px] text-blue-500 font-bold tracking-widest uppercase">Transporte Especial</span>
+            <span className="text-[9px] text-blue-500 font-bold tracking-widest uppercase">Transnova Plus</span>
           </div>
         </div>
         <Button variant="ghost" size="icon" onClick={() => setShowConfig(!showConfig)} className="text-slate-400 hover:text-white hover:bg-slate-800">
@@ -170,17 +173,16 @@ export default function ValeScanApp() {
             <CardHeader className="bg-slate-800/50 p-4">
               <CardTitle className="text-sm font-black uppercase flex items-center gap-2">
                 <Settings className="w-4 h-4 text-blue-400" />
-                Configuración de Mapeo
+                Mapeo de Campos
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 space-y-4">
               <div className="space-y-1.5">
-                <Label className="text-[10px] text-slate-400 uppercase font-bold">Google Form URL</Label>
+                <Label className="text-[10px] text-slate-400 uppercase font-bold">URL de Formulario Google</Label>
                 <Input
                   className="bg-slate-950 border-slate-800 h-9 text-xs"
                   value={formUrl}
                   onChange={(e) => setFormUrl(e.target.value)}
-                  placeholder="https://docs.google.com/forms/d/.../formResponse"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
@@ -211,8 +213,8 @@ export default function ValeScanApp() {
               <div className="w-24 h-24 bg-blue-600/10 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
                 <Camera className="w-12 h-12 text-blue-500" />
               </div>
-              <h2 className="text-2xl font-black italic uppercase mb-2">Escanear Vale</h2>
-              <p className="text-slate-400 text-sm max-w-[200px]">Toma una foto clara del vale para extraer los datos automáticamente</p>
+              <h2 className="text-2xl font-black italic uppercase mb-2">Capturar Vale</h2>
+              <p className="text-slate-400 text-sm max-w-[200px]">Asegúrate de que el vale esté plano y con buena luz</p>
               <input
                 type="file"
                 accept="image/*"
@@ -243,8 +245,8 @@ export default function ValeScanApp() {
               <FileText className="w-6 h-6 text-blue-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
             </div>
             <div className="text-center space-y-2">
-              <p className="text-blue-500 font-black tracking-widest text-xs uppercase animate-pulse">Vision IA Activa</p>
-              <p className="text-[10px] text-slate-500 font-bold italic">Leyendo manuscrito y campos impresos...</p>
+              <p className="text-blue-500 font-black tracking-widest text-xs uppercase animate-pulse">Analizando Documento</p>
+              <p className="text-[10px] text-slate-500 font-bold italic">Extrayendo datos impresos y manuscritos...</p>
             </div>
           </div>
         )}
@@ -252,9 +254,9 @@ export default function ValeScanApp() {
         {step === 'review' && !loading && (
           <form onSubmit={handleSubmit} className="space-y-6 pb-20">
             {error && (
-              <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-                <p className="text-xs text-amber-200/80 font-medium">{error}</p>
+              <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                <p className="text-xs text-red-200/80 font-medium">{error}</p>
               </div>
             )}
 
@@ -263,10 +265,10 @@ export default function ValeScanApp() {
                 <div className="flex justify-between items-center">
                   <div>
                     <CardTitle className="text-xl font-black italic uppercase">Revisión de Vale</CardTitle>
-                    <CardDescription className="text-[10px] font-bold text-blue-500 tracking-wider">VERIFICA LOS DATOS ANTES DE ENVIAR</CardDescription>
+                    <CardDescription className="text-[10px] font-bold text-blue-500 tracking-wider">VERIFICA LOS DATOS EXTRAÍDOS</CardDescription>
                   </div>
                   {voucherData.numeroVale && (
-                    <div className="px-3 py-1 bg-red-600 rounded-lg text-white font-mono font-black text-lg border-2 border-red-500/50">
+                    <div className="px-3 py-1 bg-red-600 rounded-lg text-white font-mono font-black text-lg">
                       #{voucherData.numeroVale}
                     </div>
                   )}
@@ -275,162 +277,118 @@ export default function ValeScanApp() {
               <CardContent className="p-5 space-y-6">
                 {previewUrl && (
                   <div className="relative aspect-video rounded-xl overflow-hidden border border-slate-800 mb-6 bg-slate-950">
-                    <img src={previewUrl} alt="Vale" className="w-full h-full object-contain opacity-70" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 to-transparent flex items-end p-3">
-                      <span className="text-[9px] font-black text-white/50 uppercase tracking-widest">Referencia del Vale</span>
-                    </div>
+                    <img src={previewUrl} alt="Vale" className="w-full h-full object-contain" />
                   </div>
                 )}
 
-                <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Sección General */}
                   <div className="space-y-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <FileText className="w-4 h-4 text-blue-500" />
-                      <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Información General</h3>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <Label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Nº Vale</Label>
-                        <Input 
-                          value={voucherData.numeroVale} 
-                          onChange={(e) => setVoucherData({...voucherData, numeroVale: e.target.value})}
-                          className="bg-slate-950 border-slate-800 h-11 text-sm font-black text-red-500"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Fecha</Label>
-                        <Input 
-                          value={voucherData.fecha} 
-                          onChange={(e) => setVoucherData({...voucherData, fecha: e.target.value})}
-                          className="bg-slate-950 border-slate-800 h-11 text-sm"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Cliente / Empresa</Label>
-                      <Input 
-                        value={voucherData.cliente} 
-                        onChange={(e) => setVoucherData({...voucherData, cliente: e.target.value})}
-                        className="bg-slate-950 border-slate-800 h-11 text-sm font-bold"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-4 pt-4 border-t border-slate-800/50">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Clock className="w-4 h-4 text-blue-500" />
-                      <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Tiempos</h3>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <Label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Hora Inicio</Label>
-                        <Input 
-                          value={voucherData.horaInicio} 
-                          onChange={(e) => setVoucherData({...voucherData, horaInicio: e.target.value})}
-                          className="bg-slate-950 border-slate-800 h-11 text-sm"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Hora Final</Label>
-                        <Input 
-                          value={voucherData.horaFinal} 
-                          onChange={(e) => setVoucherData({...voucherData, horaFinal: e.target.value})}
-                          className="bg-slate-950 border-slate-800 h-11 text-sm"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4 pt-4 border-t border-slate-800/50">
-                    <div className="flex items-center gap-2 mb-2">
-                      <MapPin className="w-4 h-4 text-blue-500" />
-                      <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Ruta</h3>
-                    </div>
+                    <h3 className="text-xs font-black uppercase text-slate-500 border-b border-slate-800 pb-1 flex items-center gap-2">
+                      <FileText className="w-3 h-3" /> Datos del Vale
+                    </h3>
                     <div className="space-y-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Origen</Label>
-                        <Input 
-                          value={voucherData.origen} 
-                          onChange={(e) => setVoucherData({...voucherData, origen: e.target.value})}
-                          className="bg-slate-950 border-slate-800 h-11 text-sm"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Destino</Label>
-                        <Input 
-                          value={voucherData.destino} 
-                          onChange={(e) => setVoucherData({...voucherData, destino: e.target.value})}
-                          className="bg-slate-950 border-slate-800 h-11 text-sm"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4 pt-4 border-t border-slate-800/50">
-                    <div className="flex items-center gap-2 mb-2">
-                      <User className="w-4 h-4 text-blue-500" />
-                      <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Pasajero</h3>
-                    </div>
-                    <div className="space-y-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Nombre</Label>
-                        <Input 
-                          value={voucherData.usuarioNombre} 
-                          onChange={(e) => setVoucherData({...voucherData, usuarioNombre: e.target.value})}
-                          className="bg-slate-950 border-slate-800 h-11 text-sm"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                          <Label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Cédula</Label>
-                          <Input 
-                            value={voucherData.usuarioIdentificacion} 
-                            onChange={(e) => setVoucherData({...voucherData, usuarioIdentificacion: e.target.value})}
-                            className="bg-slate-950 border-slate-800 h-11 text-sm"
-                          />
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] uppercase font-bold text-slate-400">Nº Vale</Label>
+                          <Input value={voucherData.numeroVale} onChange={(e) => setVoucherData({...voucherData, numeroVale: e.target.value})} className="h-9 bg-slate-950 border-slate-800 text-sm" />
                         </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Cargo</Label>
-                          <Input 
-                            value={voucherData.usuarioCargo} 
-                            onChange={(e) => setVoucherData({...voucherData, usuarioCargo: e.target.value})}
-                            className="bg-slate-950 border-slate-800 h-11 text-sm"
-                          />
+                        <div className="space-y-1">
+                          <Label className="text-[10px] uppercase font-bold text-slate-400">Fecha</Label>
+                          <Input value={voucherData.fecha} onChange={(e) => setVoucherData({...voucherData, fecha: e.target.value})} className="h-9 bg-slate-950 border-slate-800 text-sm" />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px] uppercase font-bold text-slate-400">Cliente</Label>
+                        <Input value={voucherData.cliente} onChange={(e) => setVoucherData({...voucherData, cliente: e.target.value})} className="h-9 bg-slate-950 border-slate-800 text-sm" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] uppercase font-bold text-slate-400">Hora Inicio</Label>
+                          <Input value={voucherData.horaInicio} onChange={(e) => setVoucherData({...voucherData, horaInicio: e.target.value})} className="h-9 bg-slate-950 border-slate-800 text-sm" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] uppercase font-bold text-slate-400">Hora Fin</Label>
+                          <Input value={voucherData.horaFinal} onChange={(e) => setVoucherData({...voucherData, horaFinal: e.target.value})} className="h-9 bg-slate-950 border-slate-800 text-sm" />
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="space-y-4 pt-4 border-t border-slate-800/50">
-                    <div className="flex items-center gap-2 mb-2">
-                      <CreditCard className="w-4 h-4 text-blue-500" />
-                      <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Operativa</h3>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <Label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Placa Vehículo</Label>
-                        <Input 
-                          value={voucherData.placa} 
-                          onChange={(e) => setVoucherData({...voucherData, placa: e.target.value})}
-                          className="bg-slate-950 border-slate-800 h-11 text-sm font-black uppercase"
-                        />
+                  {/* Sección Ruta */}
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-black uppercase text-slate-500 border-b border-slate-800 pb-1 flex items-center gap-2">
+                      <MapPin className="w-3 h-3" /> Ruta y Solicitud
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <Label className="text-[10px] uppercase font-bold text-slate-400">Solicitante</Label>
+                        <Input value={voucherData.solicitante} onChange={(e) => setVoucherData({...voucherData, solicitante: e.target.value})} className="h-9 bg-slate-950 border-slate-800 text-sm" />
                       </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Conductor</Label>
-                        <Input 
-                          value={voucherData.conductor} 
-                          onChange={(e) => setVoucherData({...voucherData, conductor: e.target.value})}
-                          className="bg-slate-950 border-slate-800 h-11 text-sm"
-                        />
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] uppercase font-bold text-slate-400">C. Costos</Label>
+                          <Input value={voucherData.centroCostos} onChange={(e) => setVoucherData({...voucherData, centroCostos: e.target.value})} className="h-9 bg-slate-950 border-slate-800 text-sm" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] uppercase font-bold text-slate-400">Área</Label>
+                          <Input value={voucherData.area} onChange={(e) => setVoucherData({...voucherData, area: e.target.value})} className="h-9 bg-slate-950 border-slate-800 text-sm" />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px] uppercase font-bold text-slate-400">Origen</Label>
+                        <Input value={voucherData.origen} onChange={(e) => setVoucherData({...voucherData, origen: e.target.value})} className="h-9 bg-slate-950 border-slate-800 text-sm" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px] uppercase font-bold text-slate-400">Destino</Label>
+                        <Input value={voucherData.destino} onChange={(e) => setVoucherData({...voucherData, destino: e.target.value})} className="h-9 bg-slate-950 border-slate-800 text-sm" />
                       </div>
                     </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Observaciones</Label>
-                      <Textarea 
-                        value={voucherData.observaciones} 
-                        onChange={(e) => setVoucherData({...voucherData, observaciones: e.target.value})}
-                        className="bg-slate-950 border-slate-800 min-h-[80px] text-sm"
-                      />
+                  </div>
+
+                  {/* Sección Pasajero */}
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-black uppercase text-slate-500 border-b border-slate-800 pb-1 flex items-center gap-2">
+                      <User className="w-3 h-3" /> Pasajero
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <Label className="text-[10px] uppercase font-bold text-slate-400">Nombre Usuario</Label>
+                        <Input value={voucherData.usuarioNombre} onChange={(e) => setVoucherData({...voucherData, usuarioNombre: e.target.value})} className="h-9 bg-slate-950 border-slate-800 text-sm" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] uppercase font-bold text-slate-400">Identificación</Label>
+                          <Input value={voucherData.usuarioIdentificacion} onChange={(e) => setVoucherData({...voucherData, usuarioIdentificacion: e.target.value})} className="h-9 bg-slate-950 border-slate-800 text-sm" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] uppercase font-bold text-slate-400">Cargo</Label>
+                          <Input value={voucherData.usuarioCargo} onChange={(e) => setVoucherData({...voucherData, usuarioCargo: e.target.value})} className="h-9 bg-slate-950 border-slate-800 text-sm" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sección Vehículo */}
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-black uppercase text-slate-500 border-b border-slate-800 pb-1 flex items-center gap-2">
+                      <CreditCard className="w-3 h-3" /> Operación
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] uppercase font-bold text-slate-400">Placa</Label>
+                          <Input value={voucherData.placa} onChange={(e) => setVoucherData({...voucherData, placa: e.target.value})} className="h-9 bg-slate-950 border-slate-800 text-sm font-bold uppercase" />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] uppercase font-bold text-slate-400">Conductor</Label>
+                          <Input value={voucherData.conductor} onChange={(e) => setVoucherData({...voucherData, conductor: e.target.value})} className="h-9 bg-slate-950 border-slate-800 text-sm" />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px] uppercase font-bold text-slate-400">Observaciones</Label>
+                        <Textarea value={voucherData.observaciones} onChange={(e) => setVoucherData({...voucherData, observaciones: e.target.value})} className="bg-slate-950 border-slate-800 text-xs min-h-[60px]" />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -439,11 +397,11 @@ export default function ValeScanApp() {
 
             <div className="fixed bottom-0 left-0 right-0 p-4 bg-slate-950/80 backdrop-blur-lg border-t border-slate-800 flex gap-4 z-50">
               <Button type="button" variant="outline" className="flex-1 h-14 rounded-2xl border-slate-800 font-bold uppercase text-xs" onClick={resetApp}>
-                Cancelar
+                Descartar
               </Button>
               <Button type="submit" className="flex-[2] h-14 rounded-2xl bg-blue-600 hover:bg-blue-700 text-lg font-black italic shadow-xl shadow-blue-600/20">
                 <Send className="w-5 h-5 mr-3" />
-                ENVIAR ENCUESTA
+                ENVIAR REPORTE
               </Button>
             </div>
           </form>
@@ -451,29 +409,25 @@ export default function ValeScanApp() {
 
         {step === 'success' && (
           <div className="flex flex-col items-center justify-center text-center gap-8 py-20 px-4">
-            <div className="relative">
-              <div className="w-32 h-32 bg-green-500/10 rounded-full flex items-center justify-center text-green-500 ring-8 ring-green-500/5">
-                <CheckCircle2 className="w-20 h-20 animate-in zoom-in-50 duration-500" />
-              </div>
+            <div className="w-32 h-32 bg-green-500/10 rounded-full flex items-center justify-center text-green-500">
+              <CheckCircle2 className="w-20 h-20 animate-in zoom-in-50 duration-500" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-3xl font-black italic text-white uppercase tracking-tight">Reporte Enviado</h2>
+              <h2 className="text-3xl font-black italic text-white uppercase tracking-tight">¡Enviado!</h2>
               <p className="text-slate-400 text-sm max-w-[280px] mx-auto">
-                El vale <span className="text-white font-bold">#{voucherData.numeroVale}</span> ha sido registrado exitosamente.
+                El vale <span className="text-white font-bold">#{voucherData.numeroVale}</span> ha sido registrado correctamente.
               </p>
             </div>
-            <div className="w-full max-w-xs space-y-3">
-              <Button onClick={resetApp} size="lg" className="w-full h-16 bg-white text-slate-950 hover:bg-slate-200 text-xl font-black italic rounded-2xl transition-all hover:scale-[1.02]">
-                <RefreshCcw className="w-6 h-6 mr-3" />
-                NUEVO ESCANEO
-              </Button>
-            </div>
+            <Button onClick={resetApp} size="lg" className="w-full max-w-xs h-16 bg-white text-slate-950 hover:bg-slate-200 text-xl font-black italic rounded-2xl">
+              <RefreshCcw className="w-6 h-6 mr-3" />
+              NUEVO ESCANEO
+            </Button>
           </div>
         )}
       </div>
 
       <footer className="py-8 text-center bg-slate-950/50">
-        <p className="text-[10px] text-slate-600 font-bold tracking-[0.4em] uppercase">ValeScan Vision v5.5.0 // Transnova Plus</p>
+        <p className="text-[10px] text-slate-600 font-bold tracking-[0.4em] uppercase">ValeScan Vision AI // Transnova Plus</p>
       </footer>
 
       <style jsx global>{`

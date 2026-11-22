@@ -1,7 +1,7 @@
 'use server';
 /**
- * @fileOverview Agente de IA optimizado para la lectura de vales de transporte especial.
- * Diseñado para leer texto impreso y manuscrito en condiciones de fotos reales (sombras, ángulos).
+ * @fileOverview Agente de IA especializado en la extracción de datos de vales de transporte.
+ * Optimizado para leer letra manuscrita y formatos estructurados bajo condiciones variables.
  */
 
 import { ai } from '@/ai/genkit';
@@ -12,22 +12,22 @@ const ExtractVoucherInputSchema = z.object({
 });
 
 const ExtractVoucherOutputSchema = z.object({
-  numeroVale: z.string().describe('Número preimpreso del vale.'),
-  cliente: z.string().describe('Empresa contratante.'),
-  horaInicio: z.string().describe('Hora de inicio.'),
-  horaFinal: z.string().describe('Hora de fin.'),
-  solicitante: z.string().describe('Quién solicitó el servicio.'),
-  centroCostos: z.string().describe('Código de centro de costos.'),
-  fecha: z.string().describe('Fecha del servicio.'),
-  area: z.string().describe('Departamento/Área.'),
+  numeroVale: z.string().describe('Número preimpreso del vale (usualmente en rojo o parte superior).'),
+  cliente: z.string().describe('Nombre de la empresa o cliente.'),
+  horaInicio: z.string().describe('Hora de inicio del servicio.'),
+  horaFinal: z.string().describe('Hora de finalización del servicio.'),
+  solicitante: z.string().describe('Persona que solicitó el transporte.'),
+  centroCostos: z.string().describe('Código o nombre del centro de costos.'),
+  fecha: z.string().describe('Fecha del servicio (DD/MM/AAAA).'),
+  area: z.string().describe('Área o departamento.'),
   origen: z.string().describe('Lugar de recogida.'),
   destino: z.string().describe('Lugar de destino.'),
-  placa: z.string().describe('Placa del vehículo.'),
-  usuarioNombre: z.string().describe('Nombre del pasajero.'),
-  usuarioIdentificacion: z.string().describe('Cédula del pasajero.'),
+  placa: z.string().describe('Placa del vehículo (3 letras y 3 números).'),
+  usuarioNombre: z.string().describe('Nombre del pasajero principal.'),
+  usuarioIdentificacion: z.string().describe('Cédula o ID del pasajero.'),
   usuarioCargo: z.string().describe('Cargo del pasajero.'),
-  conductor: z.string().describe('Nombre del conductor.'),
-  observaciones: z.string().describe('Notas o novedades.'),
+  conductor: z.string().describe('Nombre del conductor asignado.'),
+  observaciones: z.string().describe('Novedades o notas adicionales.'),
 });
 
 export type ExtractVoucherOutput = z.infer<typeof ExtractVoucherOutputSchema>;
@@ -36,41 +36,38 @@ const voucherPrompt = ai.definePrompt({
   name: 'extractVoucherPrompt',
   input: { schema: ExtractVoucherInputSchema },
   output: { schema: ExtractVoucherOutputSchema },
-  prompt: `Eres un experto en digitalización de vales de transporte especial de la empresa Transnova Plus.
-Analiza la foto adjunta de una "SOLICITUD DE SERVICIO DE TRANSPORTE".
+  prompt: `Eres un sistema experto en procesamiento de documentos de transporte (OCR Multimodal).
+Tu tarea es extraer CADA UNO de los campos solicitados del formulario "SOLICITUD DE SERVICIO DE TRANSPORTE".
 
-INSTRUCCIONES DE EXTRACCIÓN:
-1. Identifica el número de vale, usualmente preimpreso en color rojo o negro en la parte superior derecha.
-2. Extrae los datos escritos a mano con bolígrafo. Sé preciso con nombres y números de identificación.
-3. Identifica la placa del vehículo (3 letras y 3 números).
-4. Si un dato no es legible debido a la calidad de la foto, devuelve una cadena vacía "". NO inventes datos.
-5. Ignora el fondo o los objetos que no pertenezcan al papel del vale.
+REGLAS CRÍTICAS:
+1. Prioriza el texto escrito a mano con bolígrafo.
+2. Si un campo está vacío en el papel, devuelve "".
+3. Identifica el número del vale, que suele estar en la parte superior derecha.
+4. Extrae la placa del vehículo con precisión.
+5. NO inventes datos. Si no es legible, devuelve "".
+6. Analiza la imagen con el máximo detalle posible para no omitir información manuscrita.
 
 Imagen del Vale: {{media url=photoDataUri}}`,
 });
 
 export async function extractVoucher(photoDataUri: string): Promise<ExtractVoucherOutput> {
   try {
-    // Aseguramos que el prefijo del data URI sea correcto
     if (!photoDataUri.startsWith('data:image/')) {
-      throw new Error('El formato de la imagen no es válido.');
+      throw new Error('Formato de imagen inválido. Debe ser una imagen válida.');
     }
 
     const { output } = await voucherPrompt({ photoDataUri });
     
     if (!output) {
-      throw new Error('La IA no devolvió resultados legibles.');
+      throw new Error('La IA procesó la imagen pero no devolvió un objeto de datos válido.');
     }
 
     return output;
   } catch (error: any) {
-    console.error('Error crítico en IA Vision:', error);
-    // Devolvemos un objeto vacío estructurado para no romper la UI y permitir llenado manual
-    return {
-      numeroVale: '', cliente: '', horaInicio: '', horaFinal: '',
-      solicitante: '', centroCostos: '', fecha: '', area: '',
-      origen: '', destino: '', placa: '', usuarioNombre: '',
-      usuarioIdentificacion: '', usuarioCargo: '', conductor: '', observaciones: '',
-    };
+    // Registramos el error real en los logs del servidor
+    console.error('GENKIT_ERROR:', error);
+    
+    // Propagamos el mensaje de error específico para que el cliente sepa qué falló (API, Cuota, Formato, etc)
+    throw new Error(error.message || 'Error desconocido al procesar la imagen con IA.');
   }
 }

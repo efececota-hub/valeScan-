@@ -1,60 +1,44 @@
+
 "use client";
 
-import { Firestore, doc, updateDoc, collection, getDocs, query, where, orderBy, addDoc, getDoc, setDoc, increment } from "firebase/firestore";
-
-export type DriverStatus = "pendiente" | "activo" | "suspendido";
-
-export interface Driver {
-  id: string;
-  name: string;
-  document: string;
-  status: DriverStatus;
-  authorized: boolean;
-  saldo: number;
-  createdAt: string;
-}
+import { Firestore, doc, updateDoc, collection, getDocs, query, where, orderBy, addDoc, getDoc, setDoc, increment, serverTimestamp } from "firebase/firestore";
 
 export interface SystemConfig {
   costo_por_vale: number;
 }
 
-export interface Voucher {
-  id: string;
-  driverId: string;
-  numero_vale: string;
-  fecha: string;
-  cliente: string;
-  origen: string;
-  destino: string;
-  descripcion: string;
-  foto_url: string;
-  costo_aplicado?: number;
-  createdAt: string;
+export interface MovimientoSaldo {
+  conductorDoc: string;
+  tipo: "recarga" | "descuento";
+  monto: number;
+  fecha: any;
+  detalle: string;
 }
 
-export const getGlobalConfig = async (db: Firestore): Promise<SystemConfig> => {
-  const configRef = doc(db, "configuracion", "general");
-  const snap = await getDoc(configRef);
-  if (snap.exists()) {
-    return snap.data() as SystemConfig;
+export const getGlobalConfig = async (db: any): Promise<SystemConfig> => {
+  try {
+    const configRef = doc(db, "configuracion", "general");
+    const snap = await getDoc(configRef);
+    if (snap.exists()) {
+      return snap.data() as SystemConfig;
+    }
+    // Si no existe, crear por defecto
+    const defaultConfig = { costo_por_vale: 500 };
+    await setDoc(configRef, defaultConfig);
+    return defaultConfig;
+  } catch (err) {
+    console.error("Error al obtener config:", err);
+    return { costo_por_vale: 500 };
   }
-  return { costo_por_vale: 150 };
 };
 
-export const saveVoucherWithPayment = async (
-  db: Firestore, 
-  voucher: Omit<Voucher, "id" | "createdAt">,
-  costo: number
-) => {
-  const vouchersRef = collection(db, "vouchers");
-  await addDoc(vouchersRef, {
-    ...voucher,
-    costo_aplicado: costo,
-    createdAt: new Date().toISOString()
-  });
-
-  const driverRef = doc(db, "drivers", voucher.driverId);
-  await updateDoc(driverRef, {
-    saldo: increment(-costo)
-  });
+export const registrarMovimiento = async (db: any, movimiento: Omit<MovimientoSaldo, "fecha">) => {
+  try {
+    await addDoc(collection(db, "movimientos_saldo"), {
+      ...movimiento,
+      fecha: serverTimestamp()
+    });
+  } catch (err) {
+    console.error("Error al registrar movimiento:", err);
+  }
 };

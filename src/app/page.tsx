@@ -14,10 +14,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { extractVoucher, ExtractVoucherOutput } from '@/ai/flows/extract-voucher-flow';
 import { cn } from '@/lib/utils';
 import { useFirebase } from '@/firebase/provider';
-import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, onSnapshot, updateDoc, increment, Unsubscribe } from 'firebase/firestore';
+import { 
+  collection, query, where, getDocs, addDoc, serverTimestamp, 
+  doc, onSnapshot, updateDoc, increment, Unsubscribe 
+} from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { registrarMovimiento, getGlobalConfig } from '@/lib/storage';
 
+// IDs de entrada de Google Form (Placeholder - Deben coincidir con el formulario real)
 const DEFAULT_ENTRY_IDS = {
   numeroVale: 'entry.1', cliente: 'entry.2', horaInicio: 'entry.3', horaFinal: 'entry.4',
   solicitante: 'entry.5', centroCostos: 'entry.6', fecha: 'entry.7', area: 'entry.8',
@@ -26,7 +30,8 @@ const DEFAULT_ENTRY_IDS = {
   descripcionServicio: 'entry.16', observaciones: 'entry.17',
 };
 
-const DEFAULT_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSfD_L6p_8B_q-7fVvR5-7W6_1Z_l_v_S_l_v_S_l_v_S_l_v_S/formResponse';
+// URL del formulario proporcionada por el usuario
+const GOOGLE_FORM_URL = 'https://forms.gle/zFs9UPsMoMXndHjK7';
 
 type AppStep = 'auth' | 'scan' | 'review' | 'awaiting_form' | 'success';
 type AuthMode = 'login' | 'register' | 'pending';
@@ -45,9 +50,6 @@ export default function ValeScanApp() {
   const [currentDriver, setCurrentDriver] = useState<any>(null);
   const [costoPorVale, setCostoPorVale] = useState(500);
 
-  const [formUrl] = useState(DEFAULT_FORM_URL);
-  const [entryIds] = useState(DEFAULT_ENTRY_IDS);
-  
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [duplicateAlert, setDuplicateAlert] = useState<any>(null);
   const [voucherData, setVoucherData] = useState<ExtractVoucherOutput>({
@@ -64,6 +66,7 @@ export default function ValeScanApp() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Inicialización de la sesión del conductor
   useEffect(() => {
     if (!isReady || !db) return;
 
@@ -74,25 +77,29 @@ export default function ValeScanApp() {
         const cfg = await getGlobalConfig(db);
         setCostoPorVale(cfg.costo_por_vale);
 
-        const savedDriver = localStorage.getItem('valescan_current_driver');
-        if (savedDriver) {
-          const d = JSON.parse(savedDriver);
-          unsubDriver = onSnapshot(doc(db, "conductores", d.id), (snap) => {
-            if (snap.exists()) {
-              const freshData = { id: snap.id, ...snap.data() };
-              setCurrentDriver(freshData);
-              if (freshData.status === 'aprobado') {
-                setStep('scan');
-                loadHistory(freshData.documento);
-              } else {
-                setStep('auth');
-                setAuthMode('pending');
+        if (typeof window !== 'undefined') {
+          const savedDriver = localStorage.getItem('valescan_current_driver');
+          if (savedDriver) {
+            const d = JSON.parse(savedDriver);
+            unsubDriver = onSnapshot(doc(db, "conductores", d.id), (snap) => {
+              if (snap.exists()) {
+                const freshData = { id: snap.id, ...snap.data() };
+                setCurrentDriver(freshData);
+                if (freshData.status === 'aprobado') {
+                  setStep('scan');
+                  loadHistory(freshData.documento);
+                } else if (freshData.status === 'rechazado') {
+                  setError("Acceso denegado.");
+                  setStep('auth');
+                } else {
+                  setStep('auth');
+                  setAuthMode('pending');
+                }
               }
-            }
-          }, (err) => {
-            console.error("Error listening to driver:", err);
-            setError("Error al conectar con el servidor.");
-          });
+            }, (err) => {
+              console.error("Firestore Listen Error:", err);
+            });
+          }
         }
       } catch (err) {
         console.error("Initialization error:", err);
@@ -111,7 +118,6 @@ export default function ValeScanApp() {
       const q = query(collection(db, "vales"), where("conductorDoc", "==", docStr));
       const snapshot = await getDocs(q);
       const vales = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      // Ordenar en cliente para evitar requerir índices compuestos inmediatos
       vales.sort((a: any, b: any) => {
         const timeA = a.fechaRegistro?.toMillis?.() || 0;
         const timeB = b.fechaRegistro?.toMillis?.() || 0;
@@ -119,7 +125,7 @@ export default function ValeScanApp() {
       });
       setHistory(vales.slice(0, 20));
     } catch (err) { 
-      console.error("Error loading history:", err);
+      console.error("History load error:", err);
     }
   };
 
@@ -163,7 +169,7 @@ export default function ValeScanApp() {
       });
       setAuthMode('pending');
     } catch (err: any) { 
-      setError("Error al registrar: Verifica las reglas de Firestore."); 
+      setError("Error al registrar conductor."); 
     } finally { 
       setLoading(false); 
     }
@@ -171,10 +177,11 @@ export default function ValeScanApp() {
 
   const processFile = async (file: File) => {
     if (!currentDriver || (currentDriver.saldo || 0) < costoPorVale) {
-      alert(`Saldo insuficiente ($${currentDriver.saldo || 0}). Realiza tu recarga por Nequi.`);
+      alert(`Saldo insuficiente ($${currentDriver.saldo || 0}). Contacta con administración.`);
       return;
     }
     setLoading(true);
+    setError(null);
     const reader = new FileReader();
     reader.onload = async (e) => {
       const base64 = e.target?.result as string;
@@ -198,7 +205,8 @@ export default function ValeScanApp() {
         }
         setStep('review');
       } catch (err: any) { 
-        console.error("AI Extraction error:", err);
+        console.error("AI Error:", err);
+        setError("La IA no pudo procesar la imagen automáticamente. Completa los campos manualmente.");
         setStep('review'); 
       } finally { 
         setLoading(false); 
@@ -233,31 +241,40 @@ export default function ValeScanApp() {
       await loadHistory(currentDriver.documento);
       setStep('success');
     } catch (err) {
-      alert("Error al registrar el vale. Verifique permisos de Firestore.");
+      alert("Error al registrar el vale en la base de datos.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-50 flex flex-col antialiased">
+    <main className="min-h-screen bg-slate-950 text-slate-50 flex flex-col">
       <header className="h-16 px-4 flex items-center justify-between border-b border-slate-800 bg-slate-950/80 backdrop-blur-xl sticky top-0 z-50">
         <div className="flex items-center gap-3">
-          <div onClick={() => { setLogoTaps(prev => prev + 1); if(logoTaps >= 2) { router.push('/admin'); setLogoTaps(0); } }} className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20 cursor-pointer">
+          <div 
+            onClick={() => { 
+              setLogoTaps(prev => prev + 1); 
+              if(logoTaps >= 2) { 
+                router.push('/admin'); 
+                setLogoTaps(0); 
+              } 
+            }} 
+            className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg cursor-pointer"
+          >
             <Smartphone className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-lg font-black tracking-tight leading-none uppercase italic">ValeScan</h1>
-            <span className="text-[9px] text-blue-500 font-bold tracking-widest uppercase">Transnova Plus</span>
+            <h1 className="text-lg font-black tracking-tight uppercase italic">ValeScan</h1>
+            <span className="text-[9px] text-blue-500 font-bold uppercase">Transnova Plus</span>
           </div>
         </div>
         <div className="flex gap-2">
-          {step !== 'auth' && (
+          {step !== 'auth' && currentDriver && (
             <div className="flex items-center gap-3 bg-slate-900/50 px-3 py-1.5 rounded-full border border-slate-800">
               <div className="text-right">
                 <p className="text-[8px] font-black uppercase text-slate-500 leading-none">Mi Saldo</p>
-                <p className={cn("text-xs font-black", (currentDriver?.saldo || 0) < costoPorVale ? "text-red-500" : "text-green-500")}>
-                  ${currentDriver?.saldo || 0}
+                <p className={cn("text-xs font-black", (currentDriver.saldo || 0) < costoPorVale ? "text-red-500" : "text-green-500")}>
+                  ${currentDriver.saldo || 0}
                 </p>
               </div>
               <Wallet className="w-4 h-4 text-blue-500" />
@@ -268,7 +285,7 @@ export default function ValeScanApp() {
 
       <div className="flex-1 p-4 max-w-2xl mx-auto w-full">
         {error && (
-          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 text-red-500 rounded-xl text-xs font-bold text-center">
+          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 text-red-500 rounded-xl text-[10px] font-bold text-center">
             {error}
           </div>
         )}
@@ -301,7 +318,7 @@ export default function ValeScanApp() {
               <div className="text-center p-8 border-2 border-dashed border-slate-800 rounded-3xl">
                 <Clock className="w-12 h-12 text-amber-500 mx-auto mb-4" />
                 <h3 className="text-xl font-bold uppercase italic">Acceso Pendiente</h3>
-                <p className="text-slate-500 text-sm mt-2">Tu registro está en revisión. El administrador debe aprobar tu cuenta y asignar saldo.</p>
+                <p className="text-slate-500 text-sm mt-2">Tu registro está en revisión. El administrador debe aprobar tu cuenta.</p>
               </div>
             )}
           </div>
@@ -321,8 +338,7 @@ export default function ValeScanApp() {
                   <h2 className="text-2xl font-black italic uppercase text-red-500">Saldo Insuficiente</h2>
                   <p className="text-slate-400 text-sm italic">Tu saldo es de <b>${currentDriver?.saldo || 0}</b>. <br/>Costo por vale: <b>${costoPorVale}</b>.</p>
                   <div className="p-4 bg-slate-900 rounded-2xl border border-slate-800">
-                    <p className="text-[10px] font-black uppercase text-blue-500 mb-2">¿Cómo recargar?</p>
-                    <p className="text-xs text-slate-300">Contacta al administrador para recargar saldo vía Nequi o efectivo.</p>
+                    <p className="text-xs text-slate-300">Realiza tu recarga por Nequi con el administrador para continuar.</p>
                   </div>
                 </div>
               ) : (
@@ -396,42 +412,40 @@ export default function ValeScanApp() {
                 <AlertCircle className="text-red-600 w-5 h-5" />
                 <div>
                   <p className="text-red-500 font-black uppercase text-xs italic">VALE DUPLICADO</p>
-                  <p className="text-[10px] text-red-300">Ya fue registrado por {duplicateAlert.nombre} el {duplicateAlert.fecha}. No puedes volver a enviarlo.</p>
+                  <p className="text-[10px] text-red-300">Ya registrado por {duplicateAlert.nombre} el {duplicateAlert.fecha}.</p>
                 </div>
               </div>
             )}
             <Card className="bg-slate-900 border-slate-800">
               <CardHeader className="p-4 border-b border-slate-800">
-                <div className="flex justify-between items-center">
-                  <CardTitle className="text-sm font-black uppercase italic">Validación de Datos</CardTitle>
-                  <span className="text-[10px] bg-blue-600/20 text-blue-500 px-2 py-0.5 rounded-full font-black italic">IA ACTIVA</span>
-                </div>
+                <CardTitle className="text-sm font-black uppercase italic">Revisión de Datos</CardTitle>
               </CardHeader>
               <CardContent className="p-4 space-y-4">
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1"><Label className="text-[9px] font-black uppercase text-slate-500">Nº Vale</Label><Input value={voucherData.numeroVale} onChange={(e) => setVoucherData({...voucherData, numeroVale: e.target.value})} className="bg-slate-950 border-blue-500/30" /></div>
+                  <div className="space-y-1"><Label className="text-[9px] font-black uppercase text-slate-500">Nº Vale</Label><Input value={voucherData.numeroVale} onChange={(e) => setVoucherData({...voucherData, numeroVale: e.target.value})} className="bg-slate-950" /></div>
                   <div className="space-y-1"><Label className="text-[9px] font-black uppercase text-slate-500">Fecha</Label><Input value={voucherData.fecha} onChange={(e) => setVoucherData({...voucherData, fecha: e.target.value})} className="bg-slate-950" /></div>
                 </div>
-                <div className="space-y-1"><Label className="text-[9px] font-black uppercase text-slate-500">Cliente / Empresa</Label><Input value={voucherData.cliente} onChange={(e) => setVoucherData({...voucherData, cliente: e.target.value})} className="bg-slate-950" /></div>
+                <div className="space-y-1"><Label className="text-[9px] font-black uppercase text-slate-500">Cliente</Label><Input value={voucherData.cliente} onChange={(e) => setVoucherData({...voucherData, cliente: e.target.value})} className="bg-slate-950" /></div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1"><Label className="text-[9px] font-black uppercase text-slate-500">Origen</Label><Input value={voucherData.origen} onChange={(e) => setVoucherData({...voucherData, origen: e.target.value})} className="bg-slate-950" /></div>
                   <div className="space-y-1"><Label className="text-[9px] font-black uppercase text-slate-500">Destino</Label><Input value={voucherData.destino} onChange={(e) => setVoucherData({...voucherData, destino: e.target.value})} className="bg-slate-950" /></div>
                 </div>
-                <div className="space-y-1"><Label className="text-[9px] font-black uppercase text-slate-500">Descripción del Servicio</Label><Input value={voucherData.descripcionServicio} onChange={(e) => setVoucherData({...voucherData, descripcionServicio: e.target.value})} className="bg-slate-950" /></div>
                 <div className="space-y-1"><Label className="text-[9px] font-black uppercase text-slate-500">Pasajero</Label><Input value={voucherData.usuarioNombre} onChange={(e) => setVoucherData({...voucherData, usuarioNombre: e.target.value})} className="bg-slate-950" /></div>
+                <div className="space-y-1"><Label className="text-[9px] font-black uppercase text-slate-500">Descripción</Label><Input value={voucherData.descripcionServicio} onChange={(e) => setVoucherData({...voucherData, descripcionServicio: e.target.value})} className="bg-slate-950" /></div>
               </CardContent>
             </Card>
             <div className="fixed bottom-0 left-0 right-0 p-4 bg-slate-950/90 border-t border-slate-800 flex gap-3 backdrop-blur-md">
-              <Button variant="outline" onClick={() => setStep('scan')} className="flex-1 h-14 font-black uppercase italic border-slate-700">Atrás</Button>
-              <Button disabled={!!duplicateAlert} onClick={() => {
-                const params = new URLSearchParams();
-                Object.keys(voucherData).forEach(k => {
-                  const entryId = entryIds[k as keyof typeof entryIds];
-                  if (entryId) params.append(entryId, (voucherData as any)[k] || '');
-                });
-                window.open(`${formUrl.replace('/formResponse', '/viewform')}?${params.toString()}`, '_blank');
-                setStep('awaiting_form');
-              }} className="flex-[2] h-14 bg-blue-600 font-black text-lg italic uppercase">Abrir Formulario</Button>
+              <Button variant="outline" onClick={() => setStep('scan')} className="flex-1 h-14 font-black uppercase">Atrás</Button>
+              <Button 
+                disabled={!!duplicateAlert} 
+                onClick={() => {
+                  window.open(GOOGLE_FORM_URL, '_blank');
+                  setStep('awaiting_form');
+                }} 
+                className="flex-[2] h-14 bg-blue-600 font-black text-lg italic uppercase"
+              >
+                Abrir Encuesta
+              </Button>
             </div>
           </div>
         )}
@@ -440,11 +454,11 @@ export default function ValeScanApp() {
           <div className="py-12 flex flex-col items-center text-center gap-8">
             <div className="w-20 h-20 bg-blue-600/10 rounded-full flex items-center justify-center animate-pulse"><Send className="w-10 h-10 text-blue-500" /></div>
             <div>
-              <h2 className="text-xl font-black italic uppercase">¿Enviaste el formulario?</h2>
-              <p className="text-slate-400 text-xs mt-2 italic">Al confirmar se descontarán ${costoPorVale} de tu saldo.</p>
+              <h2 className="text-xl font-black italic uppercase">¿Ya enviaste la encuesta?</h2>
+              <p className="text-slate-400 text-xs mt-2">Al confirmar se registrará el servicio y se descontará de tu saldo.</p>
             </div>
             <div className="w-full space-y-3">
-              <Button onClick={handleFinalConfirm} disabled={loading} className="w-full h-16 bg-green-600 font-black text-lg italic uppercase">SÍ, REGISTRAR VALE</Button>
+              <Button onClick={handleFinalConfirm} disabled={loading} className="w-full h-16 bg-green-600 font-black text-lg italic uppercase">SÍ, CONFIRMAR Y GUARDAR</Button>
               <Button variant="ghost" onClick={() => setStep('review')} className="w-full text-slate-500 uppercase font-bold text-[10px]">Aún no, volver</Button>
             </div>
           </div>
@@ -453,8 +467,8 @@ export default function ValeScanApp() {
         {step === 'success' && (
           <div className="py-20 flex flex-col items-center text-center gap-6">
             <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center text-green-500"><CheckCircle2 className="w-12 h-12" /></div>
-            <h2 className="text-2xl font-black italic uppercase">¡VALE REGISTRADO!</h2>
-            <p className="text-slate-400 text-sm italic">Servicio guardado exitosamente. <br/>Saldo actualizado: ${currentDriver?.saldo || 0}</p>
+            <h2 className="text-2xl font-black italic uppercase">¡REGISTRADO!</h2>
+            <p className="text-slate-400 text-sm italic">Vale guardado correctamente.</p>
             <Button onClick={() => setStep('scan')} className="w-full h-14 bg-white text-slate-950 font-black italic rounded-2xl uppercase">Entendido</Button>
           </div>
         )}

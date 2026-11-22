@@ -1,28 +1,10 @@
 
-# Dependencias
-node_modules/
-.next/
-out/
-build/
-
-# Archivos pesados y backups (ELIMINAR BLOQUEOS)
+node_modules
+.next
+.git
 *.tar
 *.tar.gz
 *.zip
-*.gz
-*.tgz
-transnova_plus.tar
-
-# Firebase/IDX
-.firebase/
-.idx/
-firebase-debug.log*
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# Sistema
-.DS_Store
-thumbs.db
+.env*.local
+dist
+build

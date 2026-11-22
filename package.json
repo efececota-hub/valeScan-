@@ -17,7 +17,11 @@
     "clsx": "^2.1.1",
     "tailwind-merge": "^2.5.2",
     "@radix-ui/react-slot": "latest",
-    "class-variance-authority": "latest"
+    "class-variance-authority": "latest",
+    "@radix-ui/react-label": "latest",
+    "genkit": "1.x",
+    "@genkit-ai/google-genai": "latest",
+    "zod": "latest"
   },
   "devDependencies": {
     "typescript": "^5.0.0",

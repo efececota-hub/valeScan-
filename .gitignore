@@ -1,0 +1,21 @@
+
+# Dependencias
+node_modules/
+.next/
+out/
+build/
+
+# Archivos pesados y temporales (EVITA BLOQUEOS)
+*.tar
+*.tar.gz
+*.zip
+*.log
+.DS_Store
+
+# Firebase
+.firebase/
+firebase-debug.log
+
+# Entorno
+.env
+.env.local

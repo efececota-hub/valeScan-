@@ -1,0 +1,20 @@
+{
+  "name": "ValeScan - Escáner de Vales",
+  "short_name": "ValeScan",
+  "description": "App para conductores de transporte especial",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#1A1F26",
+  "theme_color": "#1A1F26",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/71/71222.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // REGLAS PÚBLICAS TEMPORALES PARA DESBLOQUEAR EL DESPLIEGUE
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

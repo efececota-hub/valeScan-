@@ -1,9 +1,6 @@
 'use server';
 /**
- * @fileOverview Flujo de IA especializado para extraer datos de vales de Transnova Plus.
- * 
- * - extractVoucher: Función principal para procesar la imagen.
- * - ExtractVoucherOutput: Estructura de datos del vale.
+ * @fileOverview Flujo de IA optimizado para la lectura de vales Transnova Plus.
  */
 
 import { ai } from '@/ai/genkit';
@@ -14,20 +11,20 @@ const ExtractVoucherInputSchema = z.object({
 });
 
 const ExtractVoucherOutputSchema = z.object({
-  numero_vale: z.string().describe('Número rojo en la esquina superior derecha.'),
-  cliente: z.string().describe('Nombre del cliente o empresa (ej. Marcopolo).'),
-  fecha: z.string().describe('Fecha del servicio en formato DD/MM/AAAA.'),
-  hora_inicio: z.string().describe('Hora de inicio escrita en el vale.'),
-  hora_final: z.string().describe('Hora final escrita en el vale.'),
-  solicitante: z.string().describe('Nombre de la persona que solicita el servicio.'),
-  centro_costos: z.string().describe('Número o nombre del centro de costos.'),
-  origen: z.string().describe('Dirección o lugar de inicio.'),
-  destino: z.string().describe('Dirección o lugar de destino.'),
-  placa: z.string().describe('Placa del vehículo (ej. WPO 374).'),
-  conductor: z.string().describe('Nombre del conductor asignado.'),
-  usuarios: z.string().describe('Nombres de los pasajeros y sus identificaciones.'),
-  valor: z.string().describe('Valor numérico del servicio.'),
-  observaciones: z.string().describe('Cualquier nota adicional o sugerencia.'),
+  numero_vale: z.string().describe('El número rojo arriba a la derecha.'),
+  cliente: z.string().describe('Nombre de la empresa o cliente (ej. Marcopolo).'),
+  fecha: z.string().describe('Fecha del servicio.'),
+  hora_inicio: z.string().describe('Hora de inicio.'),
+  hora_final: z.string().describe('Hora de finalización.'),
+  solicitante: z.string().describe('Persona que pide el servicio.'),
+  centro_costos: z.string().describe('Número del centro de costos.'),
+  origen: z.string().describe('Lugar de recogida.'),
+  destino: z.string().describe('Lugar de destino.'),
+  placa: z.string().describe('Placa del carro (ej. WPO 374).'),
+  conductor: z.string().describe('Nombre del conductor.'),
+  usuarios: z.string().describe('Nombres y documentos de los pasajeros.'),
+  valor: z.string().describe('Valor total del servicio.'),
+  observaciones: z.string().describe('Notas o detalles adicionales.'),
 });
 
 export type ExtractVoucherOutput = z.infer<typeof ExtractVoucherOutputSchema>;
@@ -36,28 +33,33 @@ const voucherPrompt = ai.definePrompt({
   name: 'extractVoucherPrompt',
   input: { schema: ExtractVoucherInputSchema },
   output: { schema: ExtractVoucherOutputSchema },
-  prompt: `Eres un experto en digitalización de vales de transporte para "Transnova Plus".
-Analiza la foto adjunta y extrae la información con precisión quirúrgica.
+  prompt: `Analiza este vale de "Transnova Plus" con extrema atención. 
+Es un formulario de transporte especial.
 
-Instrucciones específicas:
-1. El "Número de vale" es el número de 4 o 5 dígitos que aparece en color ROJO arriba a la derecha.
-2. Identifica al "Cliente" (ej. Marcopolo) y al "Solicitante" que suele estar cerca del centro de costos.
-3. En la tabla de usuarios, extrae los nombres y documentos de identidad.
-4. Captura la placa del vehículo (formato 3 letras y 3 números).
-5. Si un campo no es legible, intenta deducirlo por el contexto o deja una cadena vacía, pero NO inventes datos.
+Busca estos datos específicos:
+1. **Número de Vale**: Es el número impreso en color ROJO en la esquina superior derecha.
+2. **Cliente/Empresa**: Suele ser "Marcopolo" o similar.
+3. **Solicitante**: Persona que firma o solicita el servicio.
+4. **Centro de Costos**: Código numérico de la empresa.
+5. **Placa**: Formato de 3 letras y 3 números (ej. WPO 374).
+6. **Conductor**: Nombre del chofer asignado.
+7. **Ruta**: Lee con cuidado el "Origen" y el "Destino".
+8. **Usuarios**: Tabla central con nombres y cédulas.
 
-Imagen del vale: {{media url=photoDataUri}}`,
+Si no ves un dato claramente, deja el campo vacío "", NO inventes nada.
+
+Imagen: {{media url=photoDataUri}}`,
 });
 
 export async function extractVoucher(photoDataUri: string): Promise<ExtractVoucherOutput> {
   try {
     const { output } = await voucherPrompt({ photoDataUri });
     if (!output) {
-      throw new Error('La IA no devolvió resultados para esta imagen.');
+      throw new Error('La IA no pudo procesar la imagen correctamente.');
     }
     return output;
-  } catch (error) {
-    console.error('Error en extractVoucher flow:', error);
-    throw new Error('Error al analizar el vale. Por favor, intenta con una foto más clara.');
+  } catch (error: any) {
+    console.error('Error en el flujo de extracción:', error);
+    throw new Error('No se pudo leer el vale. Asegúrate de que la foto tenga buena luz y se vea todo el papel.');
   }
 }

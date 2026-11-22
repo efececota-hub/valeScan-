@@ -18,7 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { extractVoucher, ExtractVoucherOutput } from '@/ai/flows/extract-voucher-flow';
 import { cn } from '@/lib/utils';
 import { useFirebase } from '@/firebase/provider';
-import { collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, limit } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, serverTimestamp, getDoc, doc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 
 const DEFAULT_ENTRY_IDS = {
@@ -96,18 +96,25 @@ export default function ValeScanApp() {
     }
   }, [isReady]);
 
-  const loadHistory = async (doc: string) => {
-    if (!isReady) return;
+  const loadHistory = async (docStr: string) => {
+    if (!isReady || !docStr) return;
     try {
+      // Simplificamos la consulta para evitar error de índice compuesto en el prototipo
       const q = query(
         collection(db, "vales"), 
-        where("conductorDoc", "==", doc),
-        orderBy("fechaRegistro", "desc"),
-        limit(20)
+        where("conductorDoc", "==", docStr)
       );
       const snapshot = await getDocs(q);
       const vales = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      setHistory(vales);
+      
+      // Ordenar localmente por fecha de registro descendente
+      vales.sort((a: any, b: any) => {
+        const dateA = a.fechaRegistro?.toDate?.()?.getTime() || 0;
+        const dateB = b.fechaRegistro?.toDate?.()?.getTime() || 0;
+        return dateB - dateA;
+      });
+
+      setHistory(vales.slice(0, 20)); // Limitar a los 20 más recientes
     } catch (err) {
       console.error("Error al cargar historial:", err);
     }
@@ -215,7 +222,8 @@ export default function ValeScanApp() {
       const value = voucherData[key as keyof typeof voucherData];
       params.append(entryId, value || '');
     });
-    window.open(`${formUrl.replace('/formResponse', '/viewform')}?${params.toString()}`, '_blank');
+    const fullUrl = `${formUrl.replace('/formResponse', '/viewform')}?${params.toString()}`;
+    window.open(fullUrl, '_blank');
     setStep('awaiting_form');
   };
 
@@ -250,7 +258,7 @@ export default function ValeScanApp() {
     let text = `*RESUMEN DE VALES - TRANSNOVA PLUS*\n`;
     text += `Conductor: ${currentDriver.nombre}\n\n`;
 
-    valesToShare.forEach((v, i) => {
+    valesToShare.forEach((v) => {
       text += `*VALE #${v.numeroVale}*\n`;
       text += `- Cliente: ${v.cliente}\n`;
       text += `- Fecha: ${v.fecha}\n`;
@@ -327,12 +335,12 @@ export default function ValeScanApp() {
               </Card>
             ) : authMode === 'register' ? (
               <Card className="w-full bg-slate-900 border-slate-800">
-                <CardHeader><CardTitle className="text-center">REGISTRO</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-center font-black uppercase italic">REGISTRO</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                   <Input placeholder="Nombre Completo" value={driverName} onChange={(e) => setDriverName(e.target.value)} />
                   <Input type="number" placeholder="Documento" value={driverDoc} onChange={(e) => setDriverDoc(e.target.value)} />
-                  <Button onClick={handleRegister} className="w-full h-14 bg-green-600">REGISTRARME</Button>
-                  <Button variant="link" onClick={() => setAuthMode('login')} className="w-full">Volver al ingreso</Button>
+                  <Button onClick={handleRegister} className="w-full h-14 bg-green-600 font-black">REGISTRARME</Button>
+                  <Button variant="link" onClick={() => setAuthMode('login')} className="w-full text-slate-500">Volver al ingreso</Button>
                 </CardContent>
               </Card>
             ) : (
@@ -340,7 +348,7 @@ export default function ValeScanApp() {
                 <Clock className="w-12 h-12 text-amber-500 mx-auto mb-4" />
                 <h3 className="text-xl font-bold uppercase">Solicitud Pendiente</h3>
                 <p className="text-slate-500 text-sm mt-2">Tu acceso debe ser aprobado por el administrador.</p>
-                <Button variant="outline" className="mt-6" onClick={() => setAuthMode('login')}>Volver</Button>
+                <Button variant="outline" className="mt-6 font-bold" onClick={() => setAuthMode('login')}>Volver</Button>
               </div>
             )}
           </div>

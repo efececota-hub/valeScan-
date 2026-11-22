@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -18,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { useFirebase } from '@/firebase/provider';
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 const DEFAULT_ENTRY_IDS = {
   numeroVale: 'entry.1',
@@ -44,6 +44,7 @@ type AppStep = 'auth' | 'scan' | 'review' | 'success';
 type AuthMode = 'login' | 'register' | 'pending';
 
 export default function ValeScanApp() {
+  const router = useRouter();
   const { db, isReady } = useFirebase();
   const [step, setStep] = useState<AppStep>('auth');
   const [authMode, setAuthMode] = useState<AuthMode>('login');
@@ -51,6 +52,9 @@ export default function ValeScanApp() {
   const [error, setError] = useState<{ message: string; type: 'warning' | 'error' | 'billing' } | null>(null);
   const [showConfig, setShowConfig] = useState(false);
   
+  // Easter Egg State
+  const [logoTaps, setLogoTaps] = useState(0);
+
   // Auth State
   const [driverDoc, setDriverDoc] = useState('');
   const [driverName, setDriverName] = useState('');
@@ -86,6 +90,18 @@ export default function ValeScanApp() {
       }
     }
   }, []);
+
+  const handleLogoTap = () => {
+    const newTaps = logoTaps + 1;
+    if (newTaps === 3) {
+      router.push('/admin');
+      setLogoTaps(0);
+    } else {
+      setLogoTaps(newTaps);
+      // Reset taps after 2 seconds of inactivity
+      setTimeout(() => setLogoTaps(0), 2000);
+    }
+  };
 
   const handleAuth = async () => {
     if (!isReady || !driverDoc) return;
@@ -123,7 +139,6 @@ export default function ValeScanApp() {
     setLoading(true);
     setError(null);
     try {
-      // Verificar si ya existe antes de registrar
       const q = query(collection(db, "conductores"), where("documento", "==", driverDoc));
       const querySnapshot = await getDocs(q);
       
@@ -227,10 +242,13 @@ export default function ValeScanApp() {
     <main className="min-h-screen bg-slate-950 text-slate-50 flex flex-col antialiased">
       <header className="h-16 px-4 flex items-center justify-between border-b border-slate-800 bg-slate-950/80 backdrop-blur-xl sticky top-0 z-50">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+          <div 
+            onClick={handleLogoTap}
+            className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20 cursor-pointer active:scale-95 transition-transform"
+          >
             <Smartphone className="w-5 h-5 text-white" />
           </div>
-          <div>
+          <div onClick={handleLogoTap} className="cursor-pointer">
             <h1 className="text-lg font-black tracking-tight leading-none uppercase italic">ValeScan</h1>
             <span className="text-[9px] text-blue-500 font-bold tracking-widest uppercase">Transnova Plus</span>
           </div>
@@ -272,7 +290,10 @@ export default function ValeScanApp() {
 
         {step === 'auth' && (
           <div className="flex flex-col items-center justify-center py-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="w-20 h-20 bg-blue-600/10 rounded-full flex items-center justify-center mb-8">
+            <div 
+              onClick={handleLogoTap}
+              className="w-20 h-20 bg-blue-600/10 rounded-full flex items-center justify-center mb-8 cursor-pointer active:bg-blue-600/20"
+            >
               <ShieldCheck className="w-10 h-10 text-blue-500" />
             </div>
 

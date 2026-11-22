@@ -1,15 +1,14 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import { useFirebase } from '@/firebase/provider';
 import { 
   collection, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy, 
-  getDoc, setDoc, increment 
+  getDoc, setDoc, increment, Unsubscribe 
 } from 'firebase/firestore';
 import { 
-  ShieldCheck, CheckCircle, XCircle, Trash2, ArrowLeft, 
-  Loader2, User, Wallet, Save, PlusCircle, History, Edit3
+  ShieldCheck, CheckCircle, Trash2, ArrowLeft, 
+  Loader2, User, Save, PlusCircle, Edit3
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -31,26 +30,35 @@ export default function AdminPanel() {
   const [rechargeAmount, setRechargeAmount] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (!isReady || !authorized) return;
+    if (!isReady || !db || !authorized) return;
 
-    // Cargar Configuración Global
-    const loadConfig = async () => {
-      const configRef = doc(db, "configuracion", "general");
-      const snap = await getDoc(configRef);
-      if (snap.exists()) setCostoVale(snap.data().costo_por_vale);
+    let unsubConductores: Unsubscribe | null = null;
+
+    const loadData = async () => {
+      try {
+        const configRef = doc(db, "configuracion", "general");
+        const snap = await getDoc(configRef);
+        if (snap.exists()) setCostoVale(snap.data().costo_por_vale);
+
+        const q = query(collection(db, "conductores"), orderBy("fechaRegistro", "desc"));
+        unsubConductores = onSnapshot(q, (snapshot) => {
+          const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setConductores(docs);
+          setLoading(false);
+        }, (err) => {
+          console.error("Firestore error:", err);
+          setLoading(false);
+        });
+      } catch (err) {
+        console.error("Error loading admin data:", err);
+      }
     };
-    loadConfig();
 
-    // Suscribirse a Conductores
-    const q = query(collection(db, "conductores"), orderBy("fechaRegistro", "desc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setConductores(docs);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [isReady, authorized]);
+    loadData();
+    return () => {
+      if (unsubConductores) unsubConductores();
+    };
+  }, [isReady, db, authorized]);
 
   const handleLogin = () => {
     if (pin === ADMIN_PIN) setAuthorized(true);
@@ -58,21 +66,24 @@ export default function AdminPanel() {
   };
 
   const saveGlobalConfig = async () => {
+    if (!db) return;
     try {
       await setDoc(doc(db, "configuracion", "general"), { costo_por_vale: Number(costoVale) });
-      alert("Tarifa guardada correctamente");
+      alert("Configuración guardada");
     } catch (err) {
-      alert("Error al guardar tarifa");
+      alert("Error al guardar: Verifica reglas de Firestore.");
     }
   };
 
   const updateStatus = async (id: string, status: 'aprobado' | 'rechazado') => {
+    if (!db) return;
     try {
       await updateDoc(doc(db, "conductores", id), { status });
     } catch (err) { console.error(err); }
   };
 
   const handleRecharge = async (conductor: any) => {
+    if (!db) return;
     const amount = Number(rechargeAmount[conductor.id]);
     if (!amount || amount <= 0) return;
 
@@ -85,23 +96,11 @@ export default function AdminPanel() {
         conductorDoc: conductor.documento,
         tipo: "recarga",
         monto: amount,
-        detalle: "Recarga realizada por administrador"
+        detalle: "Recarga de saldo por administrador"
       });
       setRechargeAmount({ ...rechargeAmount, [conductor.id]: '' });
-      alert(`Recarga de $${amount} exitosa para ${conductor.nombre}`);
-    } catch (err) { alert("Error en la recarga"); }
-  };
-
-  const handleManualBalance = async (conductor: any) => {
-    const newBalance = prompt("Ingresa el nuevo saldo total:", conductor.saldo || 0);
-    if (newBalance === null) return;
-
-    try {
-      await updateDoc(doc(db, "conductores", conductor.id), {
-        saldo: Number(newBalance)
-      });
-      alert("Saldo ajustado");
-    } catch (err) { alert("Error al ajustar"); }
+      alert(`$${amount} cargados a ${conductor.nombre}`);
+    } catch (err) { alert("Error al recargar"); }
   };
 
   if (!authorized) {
@@ -112,8 +111,8 @@ export default function AdminPanel() {
             <div className="w-16 h-16 bg-blue-600/10 rounded-full flex items-center justify-center mx-auto mb-4">
               <ShieldCheck className="w-8 h-8 text-blue-500" />
             </div>
-            <CardTitle className="text-xl font-black uppercase italic">Panel de Administrador</CardTitle>
-            <CardDescription>Ingresa el PIN de seguridad</CardDescription>
+            <CardTitle className="text-xl font-black uppercase italic">Acceso Restringido</CardTitle>
+            <CardDescription>Solo personal de Transnova</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Input 
@@ -124,8 +123,8 @@ export default function AdminPanel() {
               onChange={(e) => setPin(e.target.value)}
               className="text-center text-3xl h-16 tracking-[1em] font-black bg-slate-950 border-slate-800"
             />
-            <Button onClick={handleLogin} className="w-full h-12 bg-blue-600 font-bold">ACCEDER</Button>
-            <Link href="/" className="block text-center text-xs text-slate-500 hover:text-white uppercase font-bold">Volver a la App</Link>
+            <Button onClick={handleLogin} className="w-full h-12 bg-blue-600 font-bold uppercase italic">Ingresar al Panel</Button>
+            <Link href="/" className="block text-center text-[10px] text-slate-500 hover:text-white uppercase font-bold">Volver al Escáner</Link>
           </CardContent>
         </Card>
       </div>
@@ -137,19 +136,18 @@ export default function AdminPanel() {
       <header className="max-w-5xl mx-auto flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
           <Link href="/"><Button variant="ghost" size="icon" className="text-slate-400"><ArrowLeft /></Button></Link>
-          <h1 className="text-2xl font-black italic uppercase">Administración</h1>
+          <h1 className="text-2xl font-black italic uppercase">Gestión Operativa</h1>
         </div>
       </header>
 
       <div className="max-w-5xl mx-auto grid gap-6 md:grid-cols-3">
-        {/* Configuración Global */}
         <Card className="bg-slate-900 border-slate-800 md:col-span-1">
           <CardHeader>
             <CardTitle className="text-sm font-black uppercase italic text-blue-500">Configuración Global</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-slate-500 uppercase">Costo por Vale (COP)</label>
+              <label className="text-[10px] font-bold text-slate-500 uppercase">Tarifa por Vale (COP)</label>
               <Input 
                 type="number" 
                 value={costoVale} 
@@ -157,24 +155,23 @@ export default function AdminPanel() {
                 className="bg-slate-950 border-slate-800 font-black text-xl"
               />
             </div>
-            <Button onClick={saveGlobalConfig} className="w-full bg-blue-600 font-bold uppercase"><Save className="w-4 h-4 mr-2" /> Guardar Tarifa</Button>
+            <Button onClick={saveGlobalConfig} className="w-full bg-blue-600 font-bold uppercase"><Save className="w-4 h-4 mr-2" /> Guardar Cambios</Button>
           </CardContent>
         </Card>
 
-        {/* Lista de Conductores */}
         <div className="md:col-span-2 space-y-4">
-          <h2 className="text-sm font-black uppercase italic text-slate-500 ml-1">Gestión de Conductores</h2>
+          <h2 className="text-sm font-black uppercase italic text-slate-500 ml-1">Control de Conductores</h2>
           {loading ? (
             <div className="flex justify-center py-20"><Loader2 className="w-10 h-10 animate-spin text-blue-500" /></div>
           ) : conductores.map((c) => (
-            <Card key={c.id} className="bg-slate-900 border-slate-800 overflow-hidden">
+            <Card key={c.id} className="bg-slate-900 border-slate-800">
               <CardContent className="p-4">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center"><User className="w-5 h-5 text-slate-400" /></div>
                     <div>
                       <h3 className="font-black italic uppercase text-sm">{c.nombre}</h3>
-                      <p className="text-[10px] text-slate-500 font-mono">DOC: {c.documento}</p>
+                      <p className="text-[10px] text-slate-500 font-mono">ID: {c.documento}</p>
                       <Badge variant="outline" className={cn(
                         "text-[9px] uppercase font-bold mt-1",
                         c.status === 'aprobado' ? "bg-green-500/10 text-green-500 border-green-500/20" : "bg-amber-500/10 text-amber-500 border-amber-500/20"
@@ -184,20 +181,18 @@ export default function AdminPanel() {
 
                   <div className="bg-slate-950 p-3 rounded-2xl flex items-center gap-4">
                     <div className="text-center">
-                      <p className="text-[8px] font-black uppercase text-slate-600">Saldo Actual</p>
+                      <p className="text-[8px] font-black uppercase text-slate-600">Saldo</p>
                       <p className={cn("text-lg font-black", (c.saldo || 0) < 500 ? "text-red-500" : "text-green-500")}>${c.saldo || 0}</p>
                     </div>
-                    <div className="h-8 w-px bg-slate-800" />
                     <div className="flex items-center gap-2">
                       <Input 
-                        placeholder="Monto" 
+                        placeholder="COP" 
                         type="number"
                         className="w-20 h-8 text-xs bg-slate-900 border-slate-800"
                         value={rechargeAmount[c.id] || ''}
                         onChange={(e) => setRechargeAmount({...rechargeAmount, [c.id]: e.target.value})}
                       />
                       <Button size="sm" onClick={() => handleRecharge(c)} className="h-8 bg-green-600 px-2"><PlusCircle className="w-4 h-4" /></Button>
-                      <Button size="sm" variant="ghost" onClick={() => handleManualBalance(c)} className="h-8 text-slate-500"><Edit3 className="w-4 h-4" /></Button>
                     </div>
                   </div>
 
@@ -205,7 +200,7 @@ export default function AdminPanel() {
                     {c.status !== 'aprobado' && (
                       <Button size="icon" variant="ghost" onClick={() => updateStatus(c.id, 'aprobado')} className="text-green-500"><CheckCircle /></Button>
                     )}
-                    <Button size="icon" variant="ghost" onClick={() => { if(confirm("Eliminar?")) deleteDoc(doc(db, "conductores", c.id)) }} className="text-slate-600 hover:text-red-500"><Trash2 className="w-5 h-5" /></Button>
+                    <Button size="icon" variant="ghost" onClick={() => { if(confirm("¿Eliminar conductor?")) deleteDoc(doc(db!, "conductores", c.id)) }} className="text-slate-600 hover:text-red-500"><Trash2 className="w-5 h-5" /></Button>
                   </div>
                 </div>
               </CardContent>

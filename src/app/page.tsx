@@ -21,16 +21,6 @@ import {
 import { useRouter } from 'next/navigation';
 import { registrarMovimiento, getGlobalConfig } from '@/lib/storage';
 
-// IDs de entrada de Google Form (Placeholder - Deben coincidir con el formulario real)
-const DEFAULT_ENTRY_IDS = {
-  numeroVale: 'entry.1', cliente: 'entry.2', horaInicio: 'entry.3', horaFinal: 'entry.4',
-  solicitante: 'entry.5', centroCostos: 'entry.6', fecha: 'entry.7', area: 'entry.8',
-  origen: 'entry.9', destino: 'entry.10', placa: 'entry.11', usuarioNombre: 'entry.12',
-  usuarioIdentificacion: 'entry.13', usuarioCargo: 'entry.14', conductor: 'entry.15',
-  descripcionServicio: 'entry.16', observaciones: 'entry.17',
-};
-
-// URL del formulario proporcionada por el usuario
 const GOOGLE_FORM_URL = 'https://forms.gle/zFs9UPsMoMXndHjK7';
 
 type AppStep = 'auth' | 'scan' | 'review' | 'awaiting_form' | 'success';
@@ -66,7 +56,6 @@ export default function ValeScanApp() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Inicialización de la sesión del conductor
   useEffect(() => {
     if (!isReady || !db) return;
 
@@ -247,19 +236,24 @@ export default function ValeScanApp() {
     }
   };
 
+  const handleLogoTap = () => {
+    setLogoTaps(prev => {
+      const next = prev + 1;
+      if (next >= 3) {
+        router.push('/admin');
+        return 0;
+      }
+      return next;
+    });
+  };
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 flex flex-col">
       <header className="h-16 px-4 flex items-center justify-between border-b border-slate-800 bg-slate-950/80 backdrop-blur-xl sticky top-0 z-50">
         <div className="flex items-center gap-3">
           <div 
-            onClick={() => { 
-              setLogoTaps(prev => prev + 1); 
-              if(logoTaps >= 2) { 
-                router.push('/admin'); 
-                setLogoTaps(0); 
-              } 
-            }} 
-            className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg cursor-pointer"
+            onClick={handleLogoTap} 
+            className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg cursor-pointer active:scale-95 transition-transform"
           >
             <Smartphone className="w-5 h-5 text-white" />
           </div>
@@ -292,7 +286,7 @@ export default function ValeScanApp() {
 
         {step === 'auth' && (
           <div className="py-12 flex flex-col items-center">
-            <div className="w-20 h-20 bg-blue-600/10 rounded-full flex items-center justify-center mb-8">
+            <div onClick={handleLogoTap} className="w-20 h-20 bg-blue-600/10 rounded-full flex items-center justify-center mb-8 cursor-pointer">
               <Smartphone className="w-10 h-10 text-blue-500" />
             </div>
             {authMode === 'login' ? (

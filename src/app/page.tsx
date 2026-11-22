@@ -77,11 +77,18 @@ export default function ValeScanApp() {
       
       try {
         const result = await extractVoucher(base64);
+        
+        // Verificamos si el resultado vino vacío (indicando fallo en IA pero fallback manual)
+        const isEmpty = Object.values(result).every(v => v === '');
+        if (isEmpty) {
+          setError("La IA no pudo leer los datos automáticamente por baja calidad de imagen. Completa los campos manualmente.");
+        }
+        
         setVoucherData(result);
         setStep('review');
       } catch (err: any) {
-        setError("La IA no pudo leer los datos automáticamente. Por favor, completa la encuesta manualmente.");
-        setStep('review'); // Permitimos corregir manual incluso si falla el OCR
+        setError("Error de conexión. Por favor, completa la encuesta manualmente.");
+        setStep('review');
       } finally {
         setLoading(false);
       }
@@ -107,7 +114,6 @@ export default function ValeScanApp() {
     });
 
     try {
-      // Intento de envío directo (POST no-cors para Google Forms)
       await fetch(formUrl, {
         method: 'POST',
         mode: 'no-cors',
@@ -116,7 +122,6 @@ export default function ValeScanApp() {
       });
       setStep('success');
     } catch (err) {
-      // Fallback: abrir enlace prellenado si el POST falla
       const params = new URLSearchParams();
       Object.keys(voucherData).forEach((key) => {
         const entryId = entryIds[key as keyof typeof entryIds];
@@ -144,7 +149,6 @@ export default function ValeScanApp() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 flex flex-col antialiased">
-      {/* Header Fijo */}
       <header className="h-16 px-4 flex items-center justify-between border-b border-slate-800 bg-slate-950/80 backdrop-blur-xl sticky top-0 z-50">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
@@ -161,7 +165,6 @@ export default function ValeScanApp() {
       </header>
 
       <div className="flex-1 p-4 max-w-2xl mx-auto w-full">
-        {/* Panel de Configuración */}
         {showConfig && (
           <Card className="bg-slate-900 border-slate-800 mb-6 overflow-hidden">
             <CardHeader className="bg-slate-800/50 p-4">
@@ -199,7 +202,6 @@ export default function ValeScanApp() {
           </Card>
         )}
 
-        {/* Paso 1: Escaneo */}
         {step === 'scan' && !loading && (
           <div className="flex flex-col items-center justify-center pt-8 gap-8">
             <div 
@@ -210,7 +212,7 @@ export default function ValeScanApp() {
                 <Camera className="w-12 h-12 text-blue-500" />
               </div>
               <h2 className="text-2xl font-black italic uppercase mb-2">Escanear Vale</h2>
-              <p className="text-slate-400 text-sm max-w-[200px]">Toma una foto clara del vale físico para extraer los datos</p>
+              <p className="text-slate-400 text-sm max-w-[200px]">Toma una foto clara del vale para extraer los datos automáticamente</p>
               <input
                 type="file"
                 accept="image/*"
@@ -234,7 +236,6 @@ export default function ValeScanApp() {
           </div>
         )}
 
-        {/* Cargando */}
         {loading && (
           <div className="flex flex-col items-center justify-center py-32 gap-6">
             <div className="relative">
@@ -242,13 +243,12 @@ export default function ValeScanApp() {
               <FileText className="w-6 h-6 text-blue-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
             </div>
             <div className="text-center space-y-2">
-              <p className="text-blue-500 font-black tracking-widest text-xs uppercase animate-pulse">Procesando con Visión IA</p>
-              <p className="text-[10px] text-slate-500 font-bold italic">Estamos leyendo el texto y los campos...</p>
+              <p className="text-blue-500 font-black tracking-widest text-xs uppercase animate-pulse">Vision IA Activa</p>
+              <p className="text-[10px] text-slate-500 font-bold italic">Leyendo manuscrito y campos impresos...</p>
             </div>
           </div>
         )}
 
-        {/* Paso 2: Revisión (La Encuesta) */}
         {step === 'review' && !loading && (
           <form onSubmit={handleSubmit} className="space-y-6 pb-20">
             {error && (
@@ -263,7 +263,7 @@ export default function ValeScanApp() {
                 <div className="flex justify-between items-center">
                   <div>
                     <CardTitle className="text-xl font-black italic uppercase">Revisión de Vale</CardTitle>
-                    <CardDescription className="text-[10px] font-bold text-blue-500 tracking-wider">VERIFICA LOS DATOS EXTRAÍDOS</CardDescription>
+                    <CardDescription className="text-[10px] font-bold text-blue-500 tracking-wider">VERIFICA LOS DATOS ANTES DE ENVIAR</CardDescription>
                   </div>
                   {voucherData.numeroVale && (
                     <div className="px-3 py-1 bg-red-600 rounded-lg text-white font-mono font-black text-lg border-2 border-red-500/50">
@@ -273,19 +273,16 @@ export default function ValeScanApp() {
                 </div>
               </CardHeader>
               <CardContent className="p-5 space-y-6">
-                {/* Imagen del vale (Previsualización) */}
                 {previewUrl && (
                   <div className="relative aspect-video rounded-xl overflow-hidden border border-slate-800 mb-6 bg-slate-950">
-                    <img src={previewUrl} alt="Vale" className="w-full h-full object-contain opacity-70 contrast-125" />
+                    <img src={previewUrl} alt="Vale" className="w-full h-full object-contain opacity-70" />
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 to-transparent flex items-end p-3">
-                      <span className="text-[9px] font-black text-white/50 uppercase tracking-widest">Referencia Visual</span>
+                      <span className="text-[9px] font-black text-white/50 uppercase tracking-widest">Referencia del Vale</span>
                     </div>
                   </div>
                 )}
 
-                {/* Formulario Estilo Encuesta */}
                 <div className="space-y-6">
-                  {/* Sección: Identificación */}
                   <div className="space-y-4">
                     <div className="flex items-center gap-2 mb-2">
                       <FileText className="w-4 h-4 text-blue-500" />
@@ -319,7 +316,6 @@ export default function ValeScanApp() {
                     </div>
                   </div>
 
-                  {/* Sección: Horas */}
                   <div className="space-y-4 pt-4 border-t border-slate-800/50">
                     <div className="flex items-center gap-2 mb-2">
                       <Clock className="w-4 h-4 text-blue-500" />
@@ -345,11 +341,10 @@ export default function ValeScanApp() {
                     </div>
                   </div>
 
-                  {/* Sección: Ruta */}
                   <div className="space-y-4 pt-4 border-t border-slate-800/50">
                     <div className="flex items-center gap-2 mb-2">
                       <MapPin className="w-4 h-4 text-blue-500" />
-                      <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Ruta del Servicio</h3>
+                      <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Ruta</h3>
                     </div>
                     <div className="space-y-3">
                       <div className="space-y-1.5">
@@ -371,7 +366,6 @@ export default function ValeScanApp() {
                     </div>
                   </div>
 
-                  {/* Sección: Usuario / Pasajero */}
                   <div className="space-y-4 pt-4 border-t border-slate-800/50">
                     <div className="flex items-center gap-2 mb-2">
                       <User className="w-4 h-4 text-blue-500" />
@@ -388,7 +382,7 @@ export default function ValeScanApp() {
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1.5">
-                          <Label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Cédula / ID</Label>
+                          <Label className="text-[10px] font-bold uppercase text-slate-500 ml-1">Cédula</Label>
                           <Input 
                             value={voucherData.usuarioIdentificacion} 
                             onChange={(e) => setVoucherData({...voucherData, usuarioIdentificacion: e.target.value})}
@@ -407,7 +401,6 @@ export default function ValeScanApp() {
                     </div>
                   </div>
 
-                  {/* Sección: Operativa */}
                   <div className="space-y-4 pt-4 border-t border-slate-800/50">
                     <div className="flex items-center gap-2 mb-2">
                       <CreditCard className="w-4 h-4 text-blue-500" />
@@ -444,7 +437,6 @@ export default function ValeScanApp() {
               </CardContent>
             </Card>
 
-            {/* Acciones Fijas Inferiores */}
             <div className="fixed bottom-0 left-0 right-0 p-4 bg-slate-950/80 backdrop-blur-lg border-t border-slate-800 flex gap-4 z-50">
               <Button type="button" variant="outline" className="flex-1 h-14 rounded-2xl border-slate-800 font-bold uppercase text-xs" onClick={resetApp}>
                 Cancelar
@@ -457,7 +449,6 @@ export default function ValeScanApp() {
           </form>
         )}
 
-        {/* Paso 3: Éxito */}
         {step === 'success' && (
           <div className="flex flex-col items-center justify-center text-center gap-8 py-20 px-4">
             <div className="relative">
@@ -468,7 +459,7 @@ export default function ValeScanApp() {
             <div className="space-y-2">
               <h2 className="text-3xl font-black italic text-white uppercase tracking-tight">Reporte Enviado</h2>
               <p className="text-slate-400 text-sm max-w-[280px] mx-auto">
-                El vale <span className="text-white font-bold">#{voucherData.numeroVale}</span> ha sido registrado exitosamente en el sistema.
+                El vale <span className="text-white font-bold">#{voucherData.numeroVale}</span> ha sido registrado exitosamente.
               </p>
             </div>
             <div className="w-full max-w-xs space-y-3">
@@ -482,7 +473,7 @@ export default function ValeScanApp() {
       </div>
 
       <footer className="py-8 text-center bg-slate-950/50">
-        <p className="text-[10px] text-slate-600 font-bold tracking-[0.4em] uppercase">ValeScan Vision v5.0.0 // Transnova Plus</p>
+        <p className="text-[10px] text-slate-600 font-bold tracking-[0.4em] uppercase">ValeScan Vision v5.5.0 // Transnova Plus</p>
       </footer>
 
       <style jsx global>{`

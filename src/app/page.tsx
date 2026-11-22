@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -21,11 +20,14 @@ const DEFAULT_ENTRY_IDS = {
   observaciones: 'entry.666777888',
 };
 
+const DEFAULT_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSfD_L6p_8B_q-7fVvR5-7W6_1Z_l_v_S_l_v_S_l_v_S_l_v_S/formResponse';
+
 export default function ValeScanApp() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showConfig, setShowConfig] = useState(false);
+  const [formUrl, setFormUrl] = useState(DEFAULT_FORM_URL);
   const [entryIds, setEntryIds] = useState(DEFAULT_ENTRY_IDS);
   const [voucherData, setVoucherData] = useState<ExtractVoucherOutput>({
     numero_vale: '',
@@ -42,13 +44,14 @@ export default function ValeScanApp() {
 
   useEffect(() => {
     const savedIds = localStorage.getItem('valescan_entry_ids');
-    if (savedIds) {
-      setEntryIds(JSON.parse(savedIds));
-    }
+    const savedUrl = localStorage.getItem('valescan_form_url');
+    if (savedIds) setEntryIds(JSON.parse(savedIds));
+    if (savedUrl) setFormUrl(savedUrl);
   }, []);
 
   const handleSaveConfig = () => {
     localStorage.setItem('valescan_entry_ids', JSON.stringify(entryIds));
+    localStorage.setItem('valescan_form_url', formUrl);
     setShowConfig(false);
   };
 
@@ -85,9 +88,6 @@ export default function ValeScanApp() {
     setLoading(true);
     setError(null);
 
-    const formUrl = 'https://docs.google.com/forms/d/e/1FAIpQLSfD_L6p_8B_q-7fVvR5-7W6_1Z_l_v_S_l_v_S_l_v_S_l_v_S/formResponse'; // URL base de ejemplo
-    // Nota: El usuario debe cambiar esta URL por la suya propia de formResponse
-    
     const formData = new URLSearchParams();
     Object.keys(voucherData).forEach((key) => {
       const entryId = entryIds[key as keyof typeof entryIds];
@@ -96,7 +96,6 @@ export default function ValeScanApp() {
     });
 
     try {
-      // Usamos no-cors para evitar errores de política de origen, aunque no recibiremos respuesta JSON
       await fetch(formUrl, {
         method: 'POST',
         mode: 'no-cors',
@@ -115,6 +114,7 @@ export default function ValeScanApp() {
         valor: '',
         observaciones: '',
       });
+      setTimeout(() => setSuccess(false), 5000);
     } catch (err) {
       setError('Error al enviar el formulario. Verifica tu conexión.');
     } finally {
@@ -134,19 +134,30 @@ export default function ValeScanApp() {
       {showConfig && (
         <Card className="border-primary/20">
           <CardHeader>
-            <CardTitle>Configuración de Formulario</CardTitle>
-            <CardDescription>Configura los entry.ID de tu Google Form</CardDescription>
+            <CardTitle>Configuración</CardTitle>
+            <CardDescription>Configura la URL de formResponse y los entry.ID</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {Object.keys(entryIds).map((key) => (
-              <div key={key} className="space-y-1">
-                <Label className="capitalize">{key.replace('_', ' ')}</Label>
-                <Input
-                  value={entryIds[key as keyof typeof entryIds]}
-                  onChange={(e) => setEntryIds({ ...entryIds, [key]: e.target.value })}
-                />
-              </div>
-            ))}
+            <div className="space-y-1">
+              <Label>URL de Google Form (formResponse)</Label>
+              <Input
+                value={formUrl}
+                onChange={(e) => setFormUrl(e.target.value)}
+                placeholder="https://docs.google.com/forms/d/e/.../formResponse"
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {Object.keys(entryIds).map((key) => (
+                <div key={key} className="space-y-1">
+                  <Label className="capitalize text-xs">{key.replace('_', ' ')}</Label>
+                  <Input
+                    className="h-8 text-xs"
+                    value={entryIds[key as keyof typeof entryIds]}
+                    onChange={(e) => setEntryIds({ ...entryIds, [key]: e.target.value })}
+                  />
+                </div>
+              ))}
+            </div>
             <Button onClick={handleSaveConfig} className="w-full">Guardar Configuración</Button>
           </CardContent>
         </Card>
@@ -181,21 +192,21 @@ export default function ValeScanApp() {
           {loading && (
             <div className="flex items-center justify-center p-4 text-primary">
               <Loader2 className="w-8 h-8 animate-spin mr-3" />
-              <span>Procesando vale con IA...</span>
+              <span className="font-medium">Procesando vale...</span>
             </div>
           )}
 
           {error && (
             <div className="flex items-center p-4 text-destructive bg-destructive/10 rounded-lg">
               <AlertCircle className="w-5 h-5 mr-3" />
-              <span>{error}</span>
+              <span className="text-sm">{error}</span>
             </div>
           )}
 
           {success && (
             <div className="flex items-center p-4 text-green-500 bg-green-500/10 rounded-lg">
               <CheckCircle2 className="w-5 h-5 mr-3" />
-              <span>¡Vale enviado correctamente a Google Forms!</span>
+              <span className="text-sm">¡Vale enviado correctamente!</span>
             </div>
           )}
 
@@ -207,6 +218,7 @@ export default function ValeScanApp() {
                   value={voucherData.numero_vale}
                   onChange={(e) => setVoucherData({ ...voucherData, numero_vale: e.target.value })}
                   placeholder="Ej: 12345"
+                  required
                 />
               </div>
               <div className="space-y-2">
@@ -273,7 +285,7 @@ export default function ValeScanApp() {
       </Card>
       
       <p className="text-center text-xs text-muted-foreground uppercase tracking-tighter">
-        ValeScan v2.0 - Sistema de Gestión Especial
+        ValeScan v2.1 - Sistema Estabilizado
       </p>
     </main>
   );

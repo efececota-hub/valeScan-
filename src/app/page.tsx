@@ -29,6 +29,7 @@ type AuthMode = 'login' | 'register' | 'pending';
 export default function ValeScanApp() {
   const router = useRouter();
   const { db, isReady } = useFirebase();
+  const [mounted, setMounted] = useState(false);
   const [step, setStep] = useState<AppStep>('auth');
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [loading, setLoading] = useState(false);
@@ -56,9 +57,12 @@ export default function ValeScanApp() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Efecto de inicialización para evitar errores de hidratación
   useEffect(() => {
-    if (!isReady || !db) return;
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isReady || !db || !mounted) return;
 
     let unsubDriver: Unsubscribe | null = null;
 
@@ -67,9 +71,9 @@ export default function ValeScanApp() {
         const cfg = await getGlobalConfig(db);
         setCostoPorVale(cfg.costo_por_vale);
 
-        const savedDriver = localStorage.getItem('valescan_current_driver');
-        if (savedDriver) {
-          const d = JSON.parse(savedDriver);
+        const savedDriverStr = localStorage.getItem('valescan_current_driver');
+        if (savedDriverStr) {
+          const d = JSON.parse(savedDriverStr);
           unsubDriver = onSnapshot(doc(db, "conductores", d.id), (snap) => {
             if (snap.exists()) {
               const freshData = { id: snap.id, ...snap.data() };
@@ -96,7 +100,7 @@ export default function ValeScanApp() {
     return () => {
       if (unsubDriver) unsubDriver();
     };
-  }, [isReady, db]);
+  }, [isReady, db, mounted]);
 
   const loadHistory = async (docStr: string) => {
     if (!db) return;
@@ -242,6 +246,8 @@ export default function ValeScanApp() {
       setLogoTaps(nextTaps);
     }
   };
+
+  if (!mounted) return null;
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50 flex flex-col">

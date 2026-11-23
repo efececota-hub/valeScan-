@@ -8,7 +8,7 @@ import {
 } from 'firebase/firestore';
 import { 
   ShieldCheck, CheckCircle, Trash2, ArrowLeft, 
-  Loader2, User, Save, PlusCircle, Edit3
+  Loader2, User, Save, PlusCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -22,6 +22,7 @@ const ADMIN_PIN = "1234";
 
 export default function AdminPanel() {
   const { db, isReady } = useFirebase();
+  const [mounted, setMounted] = useState(false);
   const [authorized, setAuthorized] = useState(false);
   const [pin, setPin] = useState('');
   const [conductores, setConductores] = useState<any[]>([]);
@@ -30,7 +31,11 @@ export default function AdminPanel() {
   const [rechargeAmount, setRechargeAmount] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (!isReady || !db || !authorized) return;
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isReady || !db || !authorized || !mounted) return;
 
     let unsubConductores: Unsubscribe | null = null;
 
@@ -58,7 +63,7 @@ export default function AdminPanel() {
     return () => {
       if (unsubConductores) unsubConductores();
     };
-  }, [isReady, db, authorized]);
+  }, [isReady, db, authorized, mounted]);
 
   const handleLogin = () => {
     if (pin === ADMIN_PIN) setAuthorized(true);
@@ -102,6 +107,8 @@ export default function AdminPanel() {
       alert(`$${amount} cargados a ${conductor.nombre}`);
     } catch (err) { alert("Error al recargar"); }
   };
+
+  if (!mounted) return null;
 
   if (!authorized) {
     return (

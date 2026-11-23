@@ -41,7 +41,7 @@ export default function ValeScanApp() {
   const [costoPorVale, setCostoPorVale] = useState(500);
 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [duplicateAlert, setDuplicateAlert] = useState<any>(null);
+  const [duplicateAlert, setDuplicateAlert] = useState<{ nombre: string; fecha: string } | null>(null);
   const [voucherData, setVoucherData] = useState<ExtractVoucherOutput>({
     numeroVale: '', cliente: '', horaInicio: '', horaFinal: '',
     solicitante: '', centroCostos: '', fecha: '', area: '',
@@ -56,7 +56,7 @@ export default function ValeScanApp() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Manejo de Hidratación y Estado Inicial
+  // Efecto de inicialización para evitar errores de hidratación
   useEffect(() => {
     if (!isReady || !db) return;
 
@@ -67,29 +67,25 @@ export default function ValeScanApp() {
         const cfg = await getGlobalConfig(db);
         setCostoPorVale(cfg.costo_por_vale);
 
-        if (typeof window !== 'undefined') {
-          const savedDriver = localStorage.getItem('valescan_current_driver');
-          if (savedDriver) {
-            const d = JSON.parse(savedDriver);
-            unsubDriver = onSnapshot(doc(db, "conductores", d.id), (snap) => {
-              if (snap.exists()) {
-                const freshData = { id: snap.id, ...snap.data() };
-                setCurrentDriver(freshData);
-                if (freshData.status === 'aprobado') {
-                  setStep('scan');
-                  loadHistory(freshData.documento);
-                } else if (freshData.status === 'rechazado') {
-                  setError("Acceso denegado.");
-                  setStep('auth');
-                } else {
-                  setStep('auth');
-                  setAuthMode('pending');
-                }
+        const savedDriver = localStorage.getItem('valescan_current_driver');
+        if (savedDriver) {
+          const d = JSON.parse(savedDriver);
+          unsubDriver = onSnapshot(doc(db, "conductores", d.id), (snap) => {
+            if (snap.exists()) {
+              const freshData = { id: snap.id, ...snap.data() };
+              setCurrentDriver(freshData);
+              if (freshData.status === 'aprobado') {
+                setStep('scan');
+                loadHistory(freshData.documento);
+              } else if (freshData.status === 'rechazado') {
+                setError("Acceso denegado.");
+                setStep('auth');
+              } else {
+                setStep('auth');
+                setAuthMode('pending');
               }
-            }, (err) => {
-              console.error("Firestore Listen Error:", err);
-            });
-          }
+            }
+          });
         }
       } catch (err) {
         console.error("Initialization error:", err);
@@ -108,7 +104,6 @@ export default function ValeScanApp() {
       const q = query(collection(db, "vales"), where("conductorDoc", "==", docStr));
       const snapshot = await getDocs(q);
       const vales = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      // Ordenamiento manual para evitar error de índices compuestos en Firestore inicial
       vales.sort((a: any, b: any) => {
         const timeA = a.fechaRegistro?.toMillis?.() || 0;
         const timeB = b.fechaRegistro?.toMillis?.() || 0;
@@ -187,8 +182,8 @@ export default function ValeScanApp() {
           if (!snapDup.empty) {
             const d = snapDup.docs[0].data();
             setDuplicateAlert({ 
-              nombre: d.conductorNombre, 
-              fecha: d.fechaRegistro?.toDate().toLocaleString() 
+              nombre: d.conductorNombre || 'Otro conductor', 
+              fecha: d.fechaRegistro?.toDate?.().toLocaleString() || 'Desconocida'
             });
           } else { 
             setDuplicateAlert(null); 
@@ -239,14 +234,13 @@ export default function ValeScanApp() {
   };
 
   const handleLogoTap = () => {
-    setLogoTaps(prev => {
-      const next = prev + 1;
-      if (next >= 3) {
-        router.push('/admin');
-        return 0;
-      }
-      return next;
-    });
+    const nextTaps = logoTaps + 1;
+    if (nextTaps >= 3) {
+      router.push('/admin');
+      setLogoTaps(0);
+    } else {
+      setLogoTaps(nextTaps);
+    }
   };
 
   return (
